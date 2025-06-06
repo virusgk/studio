@@ -119,7 +119,7 @@ export default function AdminInventoryPage() {
           toast({ title: "Product Updated", description: `${formData.name} has been updated.` });
           console.log(`Product ${formData.name} updated successfully.`);
         } else {
-          toast({ title: "Error", description: `Failed to update ${formData.name}.`, variant: "destructive" });
+          toast({ title: "Error Updating Product", description: `Failed to update ${formData.name}. Ensure you are logged in with an admin Google account. Check console for details.`, variant: "destructive", duration: 7000 });
           console.error(`Failed to update product ${formData.name}. updateStickerInDB returned false.`);
         }
       } else {
@@ -130,13 +130,13 @@ export default function AdminInventoryPage() {
           toast({ title: "Product Added", description: `${formData.name} has been added.` });
           console.log(`Product ${formData.name} added successfully with ID: ${newId}.`);
         } else {
-          toast({ title: "Error", description: `Failed to add ${formData.name}.`, variant: "destructive" });
+          toast({ title: "Error Adding Product", description: `Failed to add ${formData.name}. Ensure you are logged in with an admin Google account. Check console for details.`, variant: "destructive", duration: 7000 });
           console.error(`Failed to add product ${formData.name}. addStickerToDB returned null.`);
         }
       }
     } catch (error: any) {
       console.error(`CRITICAL ERROR during ${operationType} product ${formData.name}:`, error);
-      toast({ title: "Critical Error", description: `An unexpected error occurred while ${operationType === "update" ? "updating" : "adding"} ${formData.name}. Message: ${error.message || 'Unknown error'}. Check console.`, variant: "destructive", duration: 7000 });
+      toast({ title: "Critical Error", description: `An unexpected error occurred. Message: ${error.message || 'Unknown error'}. Check console.`, variant: "destructive", duration: 7000 });
       success = false; // Ensure success is false on critical error
     }
 
@@ -160,7 +160,7 @@ export default function AdminInventoryPage() {
       console.log(`Product ${stickerName} deleted successfully.`);
       await fetchStickers(); // Refresh list
     } else {
-      toast({ title: "Error Deleting", description: `Could not remove ${stickerName}.`, variant: "destructive" });
+      toast({ title: "Error Deleting Product", description: `Could not remove ${stickerName}. Ensure admin authentication.`, variant: "destructive" });
       console.error(`Failed to delete product ${stickerName}. deleteStickerFromDB returned false.`);
     }
     setIsSubmitting(false);
