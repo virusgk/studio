@@ -37,7 +37,7 @@ export default function AdminUsersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingRole, setIsUpdatingRole] = useState<string | null>(null); // Store UID of user being updated
   const { toast } = useToast();
-  const { currentUser } = useAuth(); // To prevent self-role change
+  const { currentUser } = useAuth(); // To prevent self-role change & for specific error messages
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -52,7 +52,9 @@ export default function AdminUsersPage() {
 
   const handleRoleChange = async (userId: string, currentRole: 'admin' | 'user') => {
     const newRole = currentRole === 'admin' ? 'user' : 'admin';
-    if (userId === currentUser?.uid && newRole === 'user') {
+    
+    // Prevent dynamic admin from revoking their own admin status
+    if (userId === currentUser?.uid && newRole === 'user' && currentUser?.role === 'admin' && currentUser.uid !== 'admin-static-id') {
       toast({
         title: "Action Denied",
         description: "You cannot revoke your own admin status.",
@@ -70,11 +72,26 @@ export default function AdminUsersPage() {
       });
       await fetchUsers(); // Re-fetch users to update the table
     } else {
+      let detailedDescription = typeof result === 'string' ? result : "Could not update user role. Check Firestore rules and server logs.";
+      
+      // Enhance message if static admin faces permission issue
+      if (currentUser?.uid === 'admin-static-id' && typeof result === 'string' && result.includes("permission-denied")) {
+        detailedDescription = `STATIC ADMIN PERMISSION DENIED: ${result}\n\n` +
+        `This means the Firestore rule for '/users/{userId}' (allow update) is not correctly configured for the static admin ('admin-static-id').\n\n` +
+        `TROUBLESHOOTING CHECKLIST:\n` +
+        `1. VERIFY FIRESTORE RULE: In Firebase Console > Firestore > Rules, ensure 'allow update' for 'match /users/{userId}' path includes a condition specifically for the static admin. It should look similar to:\n` +
+        `   '(request.auth != null && request.auth.uid == 'admin-static-id' && request.resource.data.keys().hasAny(['role', 'lastLogin']))'\n` +
+        `2. EXACT STATIC ID: Ensure 'admin-static-id' in the rule EXACTLY matches the ID used in the application's AuthContext.\n` +
+        `3. ALLOWED FIELDS: The rule example restricts static admin to update only 'role' and/or 'lastLogin'. Ensure the updateUserRole service is only attempting to update these.\n` +
+        `4. PUBLISH RULES: Crucially, ensure any changes to Firestore rules are PUBLISHED. Changes are not live otherwise.\n` +
+        `5. SIMULATOR: Use the Firestore Rules Simulator to test an 'update' operation on a path like 'users/someUserId' with 'Authenticated' checked, Provider 'custom', and UID 'admin-static-id'. The request data should be e.g., {'role': 'admin'}. It should be ALLOWED.`;
+      }
+
       toast({
         title: "Error Updating Role",
-        description: typeof result === 'string' ? result : "Could not update user role. Check Firestore rules and server logs.",
+        description: detailedDescription,
         variant: "destructive",
-        duration: 7000,
+        duration: 12000, // Increased duration for more detailed message
       });
     }
     setIsUpdatingRole(null);
@@ -116,6 +133,7 @@ export default function AdminUsersPage() {
               <div className="text-center py-10">
                 <Users className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
                 <p className="text-xl font-semibold text-muted-foreground">No users found.</p>
+                <p className="text-sm text-muted-foreground">New users will appear here after they sign in for the first time.</p>
               </div>
             ) : (
               <Table>
@@ -146,12 +164,16 @@ export default function AdminUsersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
+                        {/* Prevent static admin from changing its own (non-existent) role or demoting itself from UI */}
+                        {user.uid === 'admin-static-id' ? (
+                            <Badge variant="outline">Static Admin</Badge>
+                        ) : (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
                               variant="outline"
                               size="sm"
-                              disabled={isUpdatingRole === user.uid || (user.uid === currentUser?.uid && user.role === 'admin')}
+                              disabled={isUpdatingRole === user.uid || (user.uid === currentUser?.uid && user.role === 'admin' && currentUser?.uid !== 'admin-static-id')}
                               className={user.role === 'admin' ? "hover:bg-destructive/10 hover:border-destructive hover:text-destructive" : "hover:bg-primary/10 hover:border-primary hover:text-primary"}
                             >
                               {isUpdatingRole === user.uid ? (
@@ -169,6 +191,9 @@ export default function AdminUsersPage() {
                               <AlertDialogTitle>Confirm Role Change</AlertDialogTitle>
                               <AlertDialogDescription>
                                 Are you sure you want to change the role of <strong>{user.displayName || user.email}</strong> to <strong>{user.role === 'admin' ? 'User' : 'Admin'}</strong>?
+                                {user.uid === currentUser?.uid && user.role === 'admin' && currentUser?.uid !== 'admin-static-id' && (
+                                  <p className="mt-2 text-destructive font-semibold">Warning: You are about to change your own role!</p>
+                                )}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -184,6 +209,7 @@ export default function AdminUsersPage() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
