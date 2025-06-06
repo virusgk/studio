@@ -31,80 +31,83 @@ export async function addStickerToDB(stickerData: Omit<Sticker, 'id'>): Promise<
   try {
     const dataWithTimestamps = {
       ...stickerData,
-      // createdAt: Timestamp.now(),
+      // createdAt: Timestamp.now(), // Example: consider adding timestamps
       // updatedAt: Timestamp.now(),
     };
     const docRef = await addDoc(stickersCollectionRef, dataWithTimestamps);
     console.log("SERVER: ADD_STICKER_TO_DB: Sticker added successfully to Firestore. Document ID:", docRef.id);
     return docRef.id;
-  } catch (error) {
+  } catch (error: any) {
+    const errorCode = error.code || 'UNKNOWN_CODE';
+    const errorMessage = error.message || 'Unknown Firestore error occurred.';
+    const fullError = `Firebase Error (Code: ${errorCode}): ${errorMessage}`;
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     console.error("SERVER: ADD_STICKER_TO_DB: CRITICAL ERROR WHILE ADDING STICKER TO FIRESTORE");
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     console.error("SERVER: ADD_STICKER_TO_DB: Error Object:", error);
-    if (error instanceof Error) {
-        console.error("SERVER: ADD_STICKER_TO_DB: Firebase Error Code (if available):", (error as any).code);
-        console.error("SERVER: ADD_STICKER_TO_DB: Firebase Error Message:", error.message);
+    console.error("SERVER: ADD_STICKER_TO_DB: Firebase Error Code:", errorCode);
+    console.error("SERVER: ADD_STICKER_TO_DB: Firebase Error Message:", errorMessage);
+    if (error.stack) {
         console.error("SERVER: ADD_STICKER_TO_DB: Error Stack Trace:", error.stack);
-    } else {
-        console.error("SERVER: ADD_STICKER_TO_DB: Encountered an error that is not an instance of Error:", error);
     }
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     console.error("SERVER: ADD_STICKER_TO_DB: Please check Firestore rules, data payload, and Firebase project config.");
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    return null;
+    return `Server Error: ${fullError}`; // Return detailed error message
   }
 }
 
-export async function updateStickerInDB(stickerId: string, stickerData: Partial<Omit<Sticker, 'id'>>): Promise<boolean> {
+export async function updateStickerInDB(stickerId: string, stickerData: Partial<Omit<Sticker, 'id'>>): Promise<boolean | string> {
   console.log(`SERVER: UPDATE_STICKER_IN_DB: Service function invoked for ID: ${stickerId}.`);
   console.log("SERVER: UPDATE_STICKER_IN_DB: Received sticker data for update:", JSON.stringify(stickerData, null, 2));
   try {
     const stickerDoc = doc(db, 'stickers', stickerId);
     const dataWithTimestamps = {
       ...stickerData,
-      // updatedAt: Timestamp.now(),
+      // updatedAt: Timestamp.now(), // Example: consider adding timestamps
     };
     await updateDoc(stickerDoc, dataWithTimestamps);
     console.log("SERVER: UPDATE_STICKER_IN_DB: Sticker updated successfully in Firestore for ID:", stickerId);
     return true;
-  } catch (error) {
+  } catch (error: any) {
+    const errorCode = error.code || 'UNKNOWN_CODE';
+    const errorMessage = error.message || 'Unknown Firestore error occurred.';
+    const fullError = `Firebase Error (Code: ${errorCode}): ${errorMessage}`;
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     console.error(`SERVER: UPDATE_STICKER_IN_DB: CRITICAL ERROR WHILE UPDATING STICKER ID ${stickerId}`);
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     console.error("SERVER: UPDATE_STICKER_IN_DB: Error Object:", error);
-     if (error instanceof Error) {
-        console.error("SERVER: UPDATE_STICKER_IN_DB: Firebase Error Code (if available):", (error as any).code);
-        console.error("SERVER: UPDATE_STICKER_IN_DB: Firebase Error Message:", error.message);
+    console.error("SERVER: UPDATE_STICKER_IN_DB: Firebase Error Code:", errorCode);
+    console.error("SERVER: UPDATE_STICKER_IN_DB: Firebase Error Message:", errorMessage);
+    if (error.stack) {
         console.error("SERVER: UPDATE_STICKER_IN_DB: Error Stack Trace:", error.stack);
-    } else {
-        console.error("SERVER: UPDATE_STICKER_IN_DB: Encountered an error that is not an instance of Error:", error);
     }
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    return false;
+    return `Server Error: ${fullError}`; // Return detailed error message
   }
 }
 
-export async function deleteStickerFromDB(stickerId: string): Promise<boolean> {
+export async function deleteStickerFromDB(stickerId: string): Promise<boolean | string> {
   console.log(`SERVER: DELETE_STICKER_FROM_DB: Service function invoked for ID: ${stickerId}.`);
   try {
     const stickerDoc = doc(db, 'stickers', stickerId);
     await deleteDoc(stickerDoc);
     console.log("SERVER: DELETE_STICKER_FROM_DB: Sticker deleted successfully from Firestore for ID:", stickerId);
     return true;
-  } catch (error) {
+  } catch (error: any) {
+    const errorCode = error.code || 'UNKNOWN_CODE';
+    const errorMessage = error.message || 'Unknown Firestore error occurred.';
+    const fullError = `Firebase Error (Code: ${errorCode}): ${errorMessage}`;
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     console.error(`SERVER: DELETE_STICKER_FROM_DB: CRITICAL ERROR WHILE DELETING STICKER ID ${stickerId}`);
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     console.error("SERVER: DELETE_STICKER_FROM_DB: Error Object:", error);
-    if (error instanceof Error) {
-        console.error("SERVER: DELETE_STICKER_FROM_DB: Firebase Error Code (if available):", (error as any).code);
-        console.error("SERVER: DELETE_STICKER_FROM_DB: Firebase Error Message:", error.message);
+    console.error("SERVER: DELETE_STICKER_FROM_DB: Firebase Error Code:", errorCode);
+    console.error("SERVER: DELETE_STICKER_FROM_DB: Firebase Error Message:", errorMessage);
+     if (error.stack) {
         console.error("SERVER: DELETE_STICKER_FROM_DB: Error Stack Trace:", error.stack);
-    } else {
-        console.error("SERVER: DELETE_STICKER_FROM_DB: Encountered an error that is not an instance of Error:", error);
     }
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    return false;
+    return `Server Error: ${fullError}`; // Return detailed error message
   }
 }

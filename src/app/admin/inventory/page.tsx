@@ -82,10 +82,11 @@ export default function AdminInventoryPage() {
     console.log("CLIENT: Video files selected:", videoFiles.map(f => f.name));
 
     if (currentUser?.uid === 'admin-static-id') {
-        console.error("CLIENT: Static admin cannot save products to the database. Please log in with a real admin Google account.");
+        const errorMsg = "Static admin account cannot save to the database. Please use Google Sign-In with an authorized admin email.";
+        console.error("CLIENT: " + errorMsg);
         toast({
             title: "Operation Denied",
-            description: "Static admin account cannot save to the database. Please use Google Sign-In with an authorized admin email.",
+            description: errorMsg,
             variant: "destructive",
             duration: 7000,
         });
@@ -126,33 +127,38 @@ export default function AdminInventoryPage() {
 
     let success = false;
     let operationType = editingSticker && formData.id ? "update" : "add";
+    let serverErrorMessage: string | null = null;
 
     try {
       if (operationType === "update" && formData.id) {
         console.log(`CLIENT: Attempting to update sticker with ID: ${formData.id}`);
-        success = await updateStickerInDB(formData.id, stickerDataPayload);
-        if (success) {
+        const result = await updateStickerInDB(formData.id, stickerDataPayload);
+        if (result === true) {
+          success = true;
           toast({ title: "Product Updated", description: `${formData.name} has been updated.` });
           console.log(`CLIENT: Product ${formData.name} updated successfully.`);
         } else {
-          toast({ title: "Error Updating Product", description: `Failed to update ${formData.name}. Ensure you are logged in with an admin Google account. Check server console for Firebase errors.`, variant: "destructive", duration: 7000 });
-          console.error(`CLIENT: Failed to update product ${formData.name}. updateStickerInDB returned false. Check server console for detailed Firebase errors.`);
+          serverErrorMessage = typeof result === 'string' ? result : "Failed to update product. Ensure admin authentication.";
+          toast({ title: "Error Updating Product", description: serverErrorMessage, variant: "destructive", duration: 7000 });
+          console.error(`CLIENT: Failed to update product ${formData.name}. Server response: ${serverErrorMessage}`);
         }
       } else {
         console.log(`CLIENT: Attempting to add new sticker: ${formData.name}`);
-        const newId = await addStickerToDB(stickerDataPayload as Omit<Sticker, 'id'>);
-        if (newId) {
+        const result = await addStickerToDB(stickerDataPayload as Omit<Sticker, 'id'>);
+        if (result && !result.startsWith('Server Error:')) {
           success = true;
           toast({ title: "Product Added", description: `${formData.name} has been added.` });
-          console.log(`CLIENT: Product ${formData.name} added successfully with ID: ${newId}.`);
+          console.log(`CLIENT: Product ${formData.name} added successfully with ID: ${result}.`);
         } else {
-          toast({ title: "Error Adding Product", description: `Failed to add ${formData.name}. Ensure you are logged in with an admin Google account. Check server console for Firebase errors.`, variant: "destructive", duration: 7000 });
-          console.error(`CLIENT: Failed to add product ${formData.name}. addStickerToDB returned null. Check server console for detailed Firebase errors.`);
+          serverErrorMessage = typeof result === 'string' ? result : "Failed to add product. Ensure admin authentication.";
+          toast({ title: "Error Adding Product", description: serverErrorMessage, variant: "destructive", duration: 7000 });
+          console.error(`CLIENT: Failed to add product ${formData.name}. Server response: ${serverErrorMessage}`);
         }
       }
     } catch (error: any) {
+      serverErrorMessage = `An unexpected error occurred on the client. Message: ${error.message || 'Unknown error'}.`;
       console.error(`CLIENT: CRITICAL ERROR during ${operationType} product ${formData.name}:`, error);
-      toast({ title: "Critical Client Error", description: `An unexpected error occurred on the client. Message: ${error.message || 'Unknown error'}. Check console.`, variant: "destructive", duration: 7000 });
+      toast({ title: "Critical Client Error", description: serverErrorMessage, variant: "destructive", duration: 7000 });
       success = false; 
     }
 
@@ -171,10 +177,11 @@ export default function AdminInventoryPage() {
     setIsSubmitting(true); 
     console.log(`CLIENT: --- Attempting to delete product ID: ${stickerId}, Name: ${stickerName} ---`);
     if (currentUser?.uid === 'admin-static-id') {
-        console.error("CLIENT: Static admin cannot delete products from the database.");
+        const errorMsg = "Static admin account cannot delete from the database. Please use Google Sign-In.";
+        console.error("CLIENT: " + errorMsg);
         toast({
             title: "Operation Denied",
-            description: "Static admin account cannot delete from the database. Please use Google Sign-In.",
+            description: errorMsg,
             variant: "destructive",
             duration: 7000,
         });
@@ -182,14 +189,15 @@ export default function AdminInventoryPage() {
         return;
     }
 
-    const success = await deleteStickerFromDB(stickerId);
-    if (success) {
+    const result = await deleteStickerFromDB(stickerId);
+    if (result === true) {
       toast({ title: "Product Deleted", description: `${stickerName} has been removed.` });
       console.log(`CLIENT: Product ${stickerName} deleted successfully.`);
       await fetchStickers(); 
     } else {
-      toast({ title: "Error Deleting Product", description: `Could not remove ${stickerName}. Ensure admin authentication and check server console for Firebase errors.`, variant: "destructive", duration: 7000 });
-      console.error(`CLIENT: Failed to delete product ${stickerName}. deleteStickerFromDB returned false. Check server console for Firebase errors.`);
+      const serverErrorMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}. Ensure admin authentication.`;
+      toast({ title: "Error Deleting Product", description: serverErrorMessage, variant: "destructive", duration: 7000 });
+      console.error(`CLIENT: Failed to delete product ${stickerName}. Server response: ${serverErrorMessage}`);
     }
     setIsSubmitting(false);
     console.log("CLIENT: --- Product delete attempt finished ---");
