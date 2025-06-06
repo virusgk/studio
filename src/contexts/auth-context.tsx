@@ -24,7 +24,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@stickerverse.com';
+const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@stickerverse.com').trim();
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -36,7 +36,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        const isUserAdmin = firebaseUser.email === ADMIN_EMAIL;
+        const isUserAdmin = firebaseUser.email?.trim() === ADMIN_EMAIL;
         
         const user: User = {
           uid: firebaseUser.uid,

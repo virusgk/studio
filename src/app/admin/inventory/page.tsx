@@ -33,6 +33,7 @@ import { ProductForm } from '@/components/admin/product-form';
 import { useToast } from '@/hooks/use-toast';
 import { getStickersFromDB, addStickerToDB, updateStickerInDB, deleteStickerFromDB } from '@/services/stickerService';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useAuth } from '@/contexts/auth-context';
 
 
 export default function AdminInventoryPage() {
@@ -43,6 +44,7 @@ export default function AdminInventoryPage() {
   const [editingSticker, setEditingSticker] = useState<Sticker | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { currentUser } = useAuth(); // Get currentUser for logging
 
   const fetchStickers = async () => {
     setIsLoadingDB(true);
@@ -70,6 +72,7 @@ export default function AdminInventoryPage() {
     videoFiles: File[]
   ) => {
     setIsSubmitting(true);
+    console.log("Attempting to save product. Current user from useAuth:", currentUser); // Log currentUser
     
     // This part remains client-side simulation for URL generation
     // In a real app, upload files to Firebase Storage here and get actual URLs
