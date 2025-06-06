@@ -3,10 +3,11 @@
 
 import { useState, useEffect } from 'react';
 import type { Sticker } from '@/types';
-import { MOCK_STICKERS } from '@/data/sticker-data'; 
+// MOCK_STICKERS is no longer the primary source of data
+// import { MOCK_STICKERS } from '@/data/sticker-data'; 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PlusCircle, Edit3, Trash2, Search, PackageOpen, Image as ImageIcon } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, Search, PackageOpen, Image as ImageIcon, Loader2 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -16,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
-import NextImage from 'next/image'; // Renamed to avoid conflict
+import NextImage from 'next/image'; 
 import {
   Dialog,
   DialogContent,
@@ -30,15 +31,29 @@ import AdminLayout from "../layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProductForm } from '@/components/admin/product-form';
 import { useToast } from '@/hooks/use-toast';
+import { getStickersFromDB, addStickerToDB, updateStickerInDB, deleteStickerFromDB } from '@/services/stickerService';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 
 export default function AdminInventoryPage() {
-  const [stickers, setStickers] = useState<Sticker[]>(MOCK_STICKERS);
+  const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [isLoadingDB, setIsLoadingDB] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSticker, setEditingSticker] = useState<Sticker | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+
+  const fetchStickers = async () => {
+    setIsLoadingDB(true);
+    const dbStickers = await getStickersFromDB();
+    setStickers(dbStickers);
+    setIsLoadingDB(false);
+  };
+
+  useEffect(() => {
+    fetchStickers();
+  }, []);
 
   const filteredStickers = stickers.filter(sticker =>
     sticker.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -50,61 +65,86 @@ export default function AdminInventoryPage() {
   };
 
   const handleSaveProduct = async (
-    formData: Omit<Sticker, 'imageUrls' | 'videoUrls' | 'id'> & { id?: string; imageUrls?: string[], videoUrls?: string[] }, 
+    formData: Omit<Sticker, 'id'> & { id?: string; }, 
     imageFiles: File[], 
     videoFiles: File[]
   ) => {
     setIsSubmitting(true);
-    console.log('Saving product:', formData);
-    console.log('Image files:', imageFiles);
-    console.log('Video files:', videoFiles);
-
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // In a real app, you would:
-    // 1. Upload imageFiles and videoFiles to storage (e.g., Firebase Storage)
-    // 2. Get the URLs of the uploaded files.
-    // 3. Combine these new URLs with any existing formData.imageUrls/videoUrls (handle removal of old ones if needed)
-    // 4. Save the complete sticker data (formData + final URLs) to your database.
-
-    const newImageUrls = [...(formData.imageUrls || [])]; // Keep existing
-    // For demo, we're not actually uploading, so we'll just use placeholders if new files exist
+    
+    // This part remains client-side simulation for URL generation
+    // In a real app, upload files to Firebase Storage here and get actual URLs
+    const newImageUrls = [...(formData.imageUrls || [])]; 
     if (imageFiles.length > 0) {
-        newImageUrls.push(...imageFiles.map(f => `https://placehold.co/100x100.png?text=New+Img`));
+        newImageUrls.push(...imageFiles.map(f => `https://placehold.co/100x100.png?text=New+Img-${f.name.substring(0,3)}`));
     }
-
     const newVideoUrls = [...(formData.videoUrls || [])];
     if (videoFiles.length > 0) {
-        newVideoUrls.push(...videoFiles.map(f => `https://placehold.co/160x90.png?text=New+Vid`));
+        newVideoUrls.push(...videoFiles.map(f => `https://placehold.co/160x90.png?text=New+Vid-${f.name.substring(0,3)}`));
     }
 
-
-    if (editingSticker && formData.id) {
-      // Update existing sticker
-      setStickers(prev => prev.map(s => s.id === formData.id ? { ...s, ...formData, imageUrls: newImageUrls, videoUrls: newVideoUrls } as Sticker : s));
-      toast({ title: "Product Updated", description: `${formData.name} has been updated.` });
-    } else {
-      // Add new sticker
-      const newSticker: Sticker = {
-        id: `sticker-${Date.now()}`,
-        ...formData,
+    const stickerDataPayload = {
+        name: formData.name,
+        description: formData.description,
+        price: formData.price,
+        stock: formData.stock,
+        category: formData.category,
+        tags: formData.tags, // Assuming tags is already an array or correctly formatted string for DB
+        availableMaterials: formData.availableMaterials,
         imageUrls: newImageUrls,
         videoUrls: newVideoUrls,
-      };
-      setStickers(prev => [newSticker, ...prev]);
-      toast({ title: "Product Added", description: `${newSticker.name} has been added.` });
+    };
+
+    let success = false;
+    if (editingSticker && formData.id) {
+      // Update existing sticker
+      success = await updateStickerInDB(formData.id, stickerDataPayload);
+      if (success) {
+        toast({ title: "Product Updated", description: `${formData.name} has been updated.` });
+      } else {
+        toast({ title: "Error", description: `Failed to update ${formData.name}.`, variant: "destructive" });
+      }
+    } else {
+      // Add new sticker
+      const newId = await addStickerToDB(stickerDataPayload as Omit<Sticker, 'id'>);
+      if (newId) {
+        success = true;
+        toast({ title: "Product Added", description: `${formData.name} has been added.` });
+      } else {
+        toast({ title: "Error", description: `Failed to add ${formData.name}.`, variant: "destructive" });
+      }
     }
+
+    if (success) {
+      await fetchStickers(); // Refresh list from DB
+    }
+    
     setIsSubmitting(false);
     setIsFormOpen(false);
     setEditingSticker(null);
   };
   
-  const handleDeleteProduct = (stickerId: string) => {
-    // TODO: Add confirmation dialog here
-    setStickers(prev => prev.filter(s => s.id !== stickerId));
-    toast({ title: "Product Deleted", description: `Product has been removed.`, variant: "destructive" });
+  const handleDeleteProduct = async (stickerId: string, stickerName: string) => {
+    setIsSubmitting(true); // Use general submitting state or a specific deleting state
+    const success = await deleteStickerFromDB(stickerId);
+    if (success) {
+      toast({ title: "Product Deleted", description: `${stickerName} has been removed.` });
+      await fetchStickers(); // Refresh list
+    } else {
+      toast({ title: "Error Deleting", description: `Could not remove ${stickerName}.`, variant: "destructive" });
+    }
+    setIsSubmitting(false);
   };
+
+  if (isLoadingDB) {
+    return (
+      <AdminLayout>
+        <div className="flex h-screen items-center justify-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="ml-4 text-lg font-semibold">Loading Inventory...</p>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
@@ -118,7 +158,7 @@ export default function AdminInventoryPage() {
 
         <Dialog open={isFormOpen} onOpenChange={(open) => {
             if (!open) {
-                setEditingSticker(null); // Reset editing state when dialog closes
+                setEditingSticker(null); 
             }
             setIsFormOpen(open);
         }}>
@@ -152,7 +192,22 @@ export default function AdminInventoryPage() {
           />
         </div>
 
-        {filteredStickers.length > 0 ? (
+        {filteredStickers.length === 0 && !isLoadingDB ? (
+            <div className="text-center py-10 border-2 border-dashed rounded-lg">
+                <PackageOpen className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
+                <p className="text-xl font-semibold text-muted-foreground font-headline">
+                  {searchTerm ? "No stickers found matching your search." : "No stickers in inventory."}
+                </p>
+                <p className="text-muted-foreground font-body">
+                  {searchTerm ? "Try a different search term." : "Add your first product to get started!"}
+                </p>
+                 {!searchTerm && (
+                    <Button onClick={() => handleOpenForm(null)} className="mt-4">
+                        <PlusCircle className="mr-2 h-5 w-5" /> Add Product
+                    </Button>
+                 )}
+            </div>
+        ) : (
         <Card className="shadow-lg">
           <Table>
             <TableHeader>
@@ -197,25 +252,42 @@ export default function AdminInventoryPage() {
                       <Edit3 className="h-4 w-4" />
                       <span className="sr-only">Edit</span>
                     </Button>
-                    {/* TODO: Implement confirmation dialog for delete */}
-                    <Button variant="ghost" size="icon" className="hover:text-destructive" onClick={() => handleDeleteProduct(sticker.id)}>
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Delete</span>
-                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="hover:text-destructive" disabled={isSubmitting}>
+                          <Trash2 className="h-4 w-4" />
+                          <span className="sr-only">Delete</span>
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the sticker "{sticker.name}" from the database.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={() => handleDeleteProduct(sticker.id, sticker.name)} 
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={isSubmitting}
+                          >
+                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </Card>
-        ) : (
-            <div className="text-center py-10 border-2 border-dashed rounded-lg">
-                <PackageOpen className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-                <p className="text-xl font-semibold text-muted-foreground font-headline">No stickers found matching your search.</p>
-                <p className="text-muted-foreground font-body">Try a different search term or add new products.</p>
-            </div>
         )}
       </div>
     </AdminLayout>
   );
 }
+

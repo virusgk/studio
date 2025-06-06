@@ -1,15 +1,32 @@
 
 'use client'; 
 
+import { useEffect, useState } from 'react';
 import { StickerGrid } from '@/components/stickers/sticker-grid';
-import { MOCK_STICKERS } from '@/data/sticker-data';
+// MOCK_STICKERS is no longer the primary source for dynamic content
+// import { MOCK_STICKERS } from '@/data/sticker-data';
+import type { Sticker } from '@/types';
+import { getStickersFromDB } from '@/services/stickerService';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, Sparkles, Wand2, CheckCircle, Package, Zap } from 'lucide-react';
+import { ArrowRight, Sparkles, Wand2, CheckCircle, Package, Zap, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 
 export default function HomePage() {
-  const stickers = MOCK_STICKERS;
+  const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStickers = async () => {
+      setIsLoading(true);
+      const dbStickers = await getStickersFromDB();
+      setStickers(dbStickers);
+      setIsLoading(false);
+    };
+    fetchStickers();
+  }, []);
+
+  const featuredStickers = stickers.slice(0, 4); // Show first 4 as featured
 
   return (
     <div className="space-y-16 md:space-y-24">
@@ -46,14 +63,19 @@ export default function HomePage() {
         <h2 className="text-3xl md:text-4xl font-headline mb-4 text-center text-foreground">
           Featured Stickers
         </h2>
-        {stickers && stickers.length > 0 ? (
-          <StickerGrid stickers={stickers.slice(0, 4)} /> 
+        {isLoading ? (
+          <div className="flex justify-center items-center py-10">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <span className="ml-3 text-lg text-muted-foreground">Loading Stickers...</span>
+          </div>
+        ) : featuredStickers.length > 0 ? (
+          <StickerGrid stickers={featuredStickers} /> 
         ) : (
           <p className="text-center text-muted-foreground py-8">No featured stickers available at the moment. Check back soon!</p>
         )}
         <div className="text-center mt-8">
           <Button asChild variant="link" className="text-primary hover:text-primary/80 text-lg">
-            <Link href="/catalog"> {/* Assuming /catalog is the full catalog page */}
+            <Link href="/#catalog"> 
               View All Stickers <ArrowRight className="ml-2 h-5 w-5" />
             </Link>
           </Button>
@@ -102,12 +124,20 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Keep the original catalog section if it's separate from featured */}
       <section id="catalog" className="container mx-auto px-4">
         <h2 className="text-3xl md:text-4xl font-headline mb-8 text-center text-foreground">
           Our Collection
         </h2>
-        <StickerGrid stickers={stickers} />
+        {isLoading ? (
+          <div className="flex justify-center items-center py-10">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+             <span className="ml-3 text-lg text-muted-foreground">Loading Collection...</span>
+          </div>
+        ) : stickers.length > 0 ? (
+          <StickerGrid stickers={stickers} />
+        ) : (
+           <p className="text-center text-muted-foreground py-10">No stickers in our collection yet. Please check back later or add some through the admin panel!</p>
+        )}
       </section>
     </div>
   );
