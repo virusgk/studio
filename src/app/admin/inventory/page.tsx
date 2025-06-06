@@ -65,7 +65,7 @@ export default function AdminInventoryPage() {
   };
 
   const handleSaveProduct = async (
-    formData: Omit<Sticker, 'id'> & { id?: string; }, 
+    formData: Omit<Sticker, 'id' | 'tags' | 'imageUrls' | 'videoUrls' | 'availableMaterials'> & { id?: string; tags?: string; category?: string; availableMaterials: string[]; imageUrls?: string[]; videoUrls?: string[] }, 
     imageFiles: File[], 
     videoFiles: File[]
   ) => {
@@ -82,19 +82,23 @@ export default function AdminInventoryPage() {
         newVideoUrls.push(...videoFiles.map(f => `https://placehold.co/160x90.png?text=New+Vid-${f.name.substring(0,3)}`));
     }
 
+    const stickerTags: string[] = formData.tags ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0) : [];
+
     const stickerDataPayload = {
         name: formData.name,
         description: formData.description,
         price: formData.price,
         stock: formData.stock,
-        category: formData.category,
-        tags: formData.tags, // Assuming tags is already an array or correctly formatted string for DB
+        category: formData.category || '', // Ensure category is not undefined
+        tags: stickerTags,
         availableMaterials: formData.availableMaterials,
         imageUrls: newImageUrls,
         videoUrls: newVideoUrls,
     };
 
     let success = false;
+    let newId: string | null = null;
+
     if (editingSticker && formData.id) {
       // Update existing sticker
       success = await updateStickerInDB(formData.id, stickerDataPayload);
@@ -105,7 +109,7 @@ export default function AdminInventoryPage() {
       }
     } else {
       // Add new sticker
-      const newId = await addStickerToDB(stickerDataPayload as Omit<Sticker, 'id'>);
+      newId = await addStickerToDB(stickerDataPayload as Omit<Sticker, 'id'>);
       if (newId) {
         success = true;
         toast({ title: "Product Added", description: `${formData.name} has been added.` });
@@ -171,7 +175,7 @@ export default function AdminInventoryPage() {
                 </DialogHeader>
                 <ProductForm 
                     sticker={editingSticker}
-                    onSave={handleSaveProduct}
+                    onSave={handleSaveProduct as any} // Cast due to simplified formData type in this component
                     onCancel={() => {
                         setIsFormOpen(false);
                         setEditingSticker(null);
