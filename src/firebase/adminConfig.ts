@@ -1,3 +1,4 @@
+
 // src/firebase/adminConfig.ts
 import * as admin from 'firebase-admin';
 
@@ -38,6 +39,20 @@ if (!admin.apps.length) {
   } else {
     try {
       const serviceAccount = JSON.parse(serviceAccountString);
+
+      // Attempt to normalize newlines in the private_key.
+      // JSON.parse correctly turns "\\n" into "\n".
+      // If the env var had literal "\\\\n", JSON.parse would turn it into "\\n".
+      // This step handles the case where the private_key string, after JSON.parse,
+      // might still contain literal "\\n" instead of actual newlines.
+      if (serviceAccount.private_key && typeof serviceAccount.private_key === 'string') {
+        const originalPrivateKey = serviceAccount.private_key;
+        serviceAccount.private_key = originalPrivateKey.replace(/\\n/g, '\n');
+        if (serviceAccount.private_key !== originalPrivateKey) {
+            console.log('FIREBASE_ADMIN_INIT: Normalized newlines in private_key from "\\\\n" to "\\n".');
+        }
+      }
+
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
       });
@@ -60,20 +75,30 @@ if (!admin.apps.length) {
   }
 } else {
   // Already initialized
+  console.log('Firebase Admin SDK was already initialized.');
   isInitialized = true;
 }
 
 if (isInitialized && admin.apps.length > 0) {
-  adminAuthInstance = admin.auth();
-  adminDbInstance = admin.firestore();
-} else {
+  try {
+    adminAuthInstance = admin.auth();
+    adminDbInstance = admin.firestore();
+     console.log('Firebase Admin Auth and Firestore instances obtained successfully.');
+  } catch (e : any) {
+    console.error("FIREBASE_ADMIN_INIT_ERROR: Error obtaining Auth or Firestore instance after initialization: " + e.message);
+    isInitialized = false; // Mark as not truly initialized if instances can't be obtained
+  }
+}
+
+if(!isInitialized) {
   console.error(
-    "FIREBASE_ADMIN_FATAL_ERROR: Firebase Admin SDK could not be initialized. " +
+    "FIREBASE_ADMIN_FATAL_ERROR: Firebase Admin SDK could not be initialized or auth/db instances could not be obtained. " +
     "This is likely due to missing or incorrect 'FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON' environment variable, " +
     "or failure to initialize with default credentials. Admin operations will fail. " +
     "Please check server startup logs for specific initialization errors."
   );
 }
+
 
 export function getAdminAuth(): admin.auth.Auth {
   if (!adminAuthInstance) {
