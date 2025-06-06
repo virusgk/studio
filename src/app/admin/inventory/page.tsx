@@ -44,13 +44,13 @@ export default function AdminInventoryPage() {
   const [editingSticker, setEditingSticker] = useState<Sticker | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const { currentUser, isAdmin } = useAuth(); // Get currentUser for logging
+  const { currentUser, isAdmin } = useAuth();
 
   const fetchStickers = async () => {
     setIsLoadingDB(true);
-    console.log("Fetching stickers from DB...");
+    console.log("CLIENT: Fetching stickers from DB...");
     const dbStickers = await getStickersFromDB();
-    console.log("Fetched stickers:", dbStickers);
+    console.log("CLIENT: Fetched stickers:", dbStickers);
     setStickers(dbStickers);
     setIsLoadingDB(false);
   };
@@ -74,12 +74,28 @@ export default function AdminInventoryPage() {
     videoFiles: File[]
   ) => {
     setIsSubmitting(true);
-    console.log("--- Attempting to save product ---");
-    console.log("Current user from useAuth:", currentUser);
-    console.log("Is Admin (from useAuth):", isAdmin);
-    console.log("Raw form data received:", formData);
-    console.log("Image files selected:", imageFiles.map(f => f.name));
-    console.log("Video files selected:", videoFiles.map(f => f.name));
+    console.log("CLIENT: --- Attempting to save product ---");
+    console.log("CLIENT: Current user from useAuth:", currentUser);
+    console.log("CLIENT: Is Admin (from useAuth):", isAdmin);
+    console.log("CLIENT: Raw form data received:", formData);
+    console.log("CLIENT: Image files selected:", imageFiles.map(f => f.name));
+    console.log("CLIENT: Video files selected:", videoFiles.map(f => f.name));
+
+    if (currentUser?.uid === 'admin-static-id') {
+        console.error("CLIENT: Static admin cannot save products to the database. Please log in with a real admin Google account.");
+        toast({
+            title: "Operation Denied",
+            description: "Static admin account cannot save to the database. Please use Google Sign-In with an authorized admin email.",
+            variant: "destructive",
+            duration: 7000,
+        });
+        setIsSubmitting(false);
+        setIsFormOpen(false);
+        setEditingSticker(null);
+        console.log("CLIENT: --- Product save attempt finished (aborted due to static admin) ---");
+        return;
+    }
+
 
     // This part remains client-side simulation for URL generation
     // In a real app, upload files to Firebase Storage here and get actual URLs
@@ -93,78 +109,90 @@ export default function AdminInventoryPage() {
     }
 
     const stickerTags: string[] = formData.tags ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0) : [];
-    console.log("Processed sticker tags:", stickerTags);
+    console.log("CLIENT: Processed sticker tags:", stickerTags);
 
     const stickerDataPayload = {
         name: formData.name,
         description: formData.description,
         price: formData.price,
         stock: formData.stock,
-        category: formData.category || '', // Ensure category is not undefined
+        category: formData.category || '',
         tags: stickerTags,
         availableMaterials: formData.availableMaterials,
         imageUrls: newImageUrls,
         videoUrls: newVideoUrls,
     };
-    console.log("Sticker data payload to be sent to DB service:", stickerDataPayload);
+    console.log("CLIENT: Sticker data payload to be sent to DB service:", stickerDataPayload);
 
     let success = false;
     let operationType = editingSticker && formData.id ? "update" : "add";
 
     try {
       if (operationType === "update" && formData.id) {
-        console.log(`Attempting to update sticker with ID: ${formData.id}`);
+        console.log(`CLIENT: Attempting to update sticker with ID: ${formData.id}`);
         success = await updateStickerInDB(formData.id, stickerDataPayload);
         if (success) {
           toast({ title: "Product Updated", description: `${formData.name} has been updated.` });
-          console.log(`Product ${formData.name} updated successfully.`);
+          console.log(`CLIENT: Product ${formData.name} updated successfully.`);
         } else {
-          toast({ title: "Error Updating Product", description: `Failed to update ${formData.name}. Ensure you are logged in with an admin Google account. Check console for details.`, variant: "destructive", duration: 7000 });
-          console.error(`Failed to update product ${formData.name}. updateStickerInDB returned false.`);
+          toast({ title: "Error Updating Product", description: `Failed to update ${formData.name}. Ensure you are logged in with an admin Google account. Check server console for Firebase errors.`, variant: "destructive", duration: 7000 });
+          console.error(`CLIENT: Failed to update product ${formData.name}. updateStickerInDB returned false. Check server console for detailed Firebase errors.`);
         }
       } else {
-        console.log(`Attempting to add new sticker: ${formData.name}`);
+        console.log(`CLIENT: Attempting to add new sticker: ${formData.name}`);
         const newId = await addStickerToDB(stickerDataPayload as Omit<Sticker, 'id'>);
         if (newId) {
           success = true;
           toast({ title: "Product Added", description: `${formData.name} has been added.` });
-          console.log(`Product ${formData.name} added successfully with ID: ${newId}.`);
+          console.log(`CLIENT: Product ${formData.name} added successfully with ID: ${newId}.`);
         } else {
-          toast({ title: "Error Adding Product", description: `Failed to add ${formData.name}. Ensure you are logged in with an admin Google account. Check console for details.`, variant: "destructive", duration: 7000 });
-          console.error(`Failed to add product ${formData.name}. addStickerToDB returned null.`);
+          toast({ title: "Error Adding Product", description: `Failed to add ${formData.name}. Ensure you are logged in with an admin Google account. Check server console for Firebase errors.`, variant: "destructive", duration: 7000 });
+          console.error(`CLIENT: Failed to add product ${formData.name}. addStickerToDB returned null. Check server console for detailed Firebase errors.`);
         }
       }
     } catch (error: any) {
-      console.error(`CRITICAL ERROR during ${operationType} product ${formData.name}:`, error);
-      toast({ title: "Critical Error", description: `An unexpected error occurred. Message: ${error.message || 'Unknown error'}. Check console.`, variant: "destructive", duration: 7000 });
-      success = false; // Ensure success is false on critical error
+      console.error(`CLIENT: CRITICAL ERROR during ${operationType} product ${formData.name}:`, error);
+      toast({ title: "Critical Client Error", description: `An unexpected error occurred on the client. Message: ${error.message || 'Unknown error'}. Check console.`, variant: "destructive", duration: 7000 });
+      success = false; 
     }
 
 
     if (success) {
-      await fetchStickers(); // Refresh list from DB
+      await fetchStickers();
     }
 
     setIsSubmitting(false);
     setIsFormOpen(false);
     setEditingSticker(null);
-    console.log("--- Product save attempt finished ---");
+    console.log("CLIENT: --- Product save attempt finished ---");
   };
 
   const handleDeleteProduct = async (stickerId: string, stickerName: string) => {
-    setIsSubmitting(true); // Use general submitting state or a specific deleting state
-    console.log(`--- Attempting to delete product ID: ${stickerId}, Name: ${stickerName} ---`);
+    setIsSubmitting(true); 
+    console.log(`CLIENT: --- Attempting to delete product ID: ${stickerId}, Name: ${stickerName} ---`);
+    if (currentUser?.uid === 'admin-static-id') {
+        console.error("CLIENT: Static admin cannot delete products from the database.");
+        toast({
+            title: "Operation Denied",
+            description: "Static admin account cannot delete from the database. Please use Google Sign-In.",
+            variant: "destructive",
+            duration: 7000,
+        });
+        setIsSubmitting(false);
+        return;
+    }
+
     const success = await deleteStickerFromDB(stickerId);
     if (success) {
       toast({ title: "Product Deleted", description: `${stickerName} has been removed.` });
-      console.log(`Product ${stickerName} deleted successfully.`);
-      await fetchStickers(); // Refresh list
+      console.log(`CLIENT: Product ${stickerName} deleted successfully.`);
+      await fetchStickers(); 
     } else {
-      toast({ title: "Error Deleting Product", description: `Could not remove ${stickerName}. Ensure admin authentication.`, variant: "destructive" });
-      console.error(`Failed to delete product ${stickerName}. deleteStickerFromDB returned false.`);
+      toast({ title: "Error Deleting Product", description: `Could not remove ${stickerName}. Ensure admin authentication and check server console for Firebase errors.`, variant: "destructive", duration: 7000 });
+      console.error(`CLIENT: Failed to delete product ${stickerName}. deleteStickerFromDB returned false. Check server console for Firebase errors.`);
     }
     setIsSubmitting(false);
-    console.log("--- Product delete attempt finished ---");
+    console.log("CLIENT: --- Product delete attempt finished ---");
   };
 
   if (isLoadingDB) {
@@ -203,7 +231,7 @@ export default function AdminInventoryPage() {
                 </DialogHeader>
                 <ProductForm
                     sticker={editingSticker}
-                    onSave={handleSaveProduct as any} // Cast due to simplified formData type in this component
+                    onSave={handleSaveProduct}
                     onCancel={() => {
                         setIsFormOpen(false);
                         setEditingSticker(null);
