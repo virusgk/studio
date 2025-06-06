@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -143,9 +142,14 @@ export default function AdminInventoryPage() {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to update product. Ensure admin authentication.";
           const detailedDescription = serverErrorMessage.includes("permission-denied")
             ? `${serverErrorMessage} CRITICAL: Firestore permission denied. 
-              1. Verify you are logged in with the correct admin Google account ('${currentUser?.email}').
-              2. In Firebase Console > Firestore > Rules, ensure the 'stickers' collection allows writes for your admin email. The rule should look like: 'allow write: if request.auth != null && request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'. Pay close attention to exact email match and using '.lower()'.
-              3. Ensure your NEXT_PUBLIC_ADMIN_EMAIL environment variable is correctly set to '${currentUser?.email?.toLowerCase()}' and your server is restarted if changed.`
+              TROUBLESHOOTING:
+              1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'.
+              2. FIRESTORE RULE CHECK: In Firebase Console > Firestore > Rules, ensure the 'stickers' collection 'allow write' rule is:
+                 'allow write: if request.auth != null && request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'
+                 (Pay EXTREME attention to using '.lower()' on BOTH sides and the EXACT email match.)
+              3. ADMIN EMAIL ENV VAR: Ensure NEXT_PUBLIC_ADMIN_EMAIL in your .env file is correctly set to '${currentUser?.email?.toLowerCase()}' and your server is restarted if changed (though this is for client-side admin check; Firestore rules use the token directly).
+              4. PUBLISH RULES: Ensure Firestore rules are PUBLISHED after any changes.
+              5. SIMULATOR: Use Firestore Rules Simulator to test the write operation for '${currentUser?.email}'.`
             : serverErrorMessage;
           toast({ title: "Error Updating Product", description: detailedDescription, variant: "destructive", duration: 10000 });
           console.error(`CLIENT: Failed to update product ${formData.name}. Server response: ${serverErrorMessage}`);
@@ -161,9 +165,14 @@ export default function AdminInventoryPage() {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to add product. Ensure admin authentication.";
            const detailedDescription = serverErrorMessage.includes("permission-denied")
             ? `${serverErrorMessage} CRITICAL: Firestore permission denied. 
-              1. Verify you are logged in with the correct admin Google account ('${currentUser?.email}').
-              2. In Firebase Console > Firestore > Rules, ensure the 'stickers' collection allows writes for your admin email. The rule should look like: 'allow write: if request.auth != null && request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'. Pay close attention to exact email match and using '.lower()'.
-              3. Ensure your NEXT_PUBLIC_ADMIN_EMAIL environment variable is correctly set to '${currentUser?.email?.toLowerCase()}' and your server is restarted if changed.`
+              TROUBLESHOOTING:
+              1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'.
+              2. FIRESTORE RULE CHECK: In Firebase Console > Firestore > Rules, ensure the 'stickers' collection 'allow write' rule for adding is like:
+                 'allow write: if request.auth != null && request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'
+                 (Pay EXTREME attention to using '.lower()' on BOTH sides for the email comparison and ensure the email string in the rule is EXACTLY '${currentUser?.email?.toLowerCase()}'.)
+              3. ADMIN EMAIL ENV VAR: Ensure NEXT_PUBLIC_ADMIN_EMAIL in your .env file is correctly set to '${currentUser?.email?.toLowerCase()}' and your server is restarted if changed (this affects client-side admin status; Firestore rules use the token directly).
+              4. PUBLISH RULES: Ensure Firestore rules are PUBLISHED after any changes.
+              5. SIMULATOR: Use Firestore Rules Simulator to test a 'create' operation on 'stickers/new_id' for user '${currentUser?.email}'.`
             : serverErrorMessage;
           toast({ title: "Error Adding Product", description: detailedDescription, variant: "destructive", duration: 10000 });
           console.error(`CLIENT: Failed to add product ${formData.name}. Server response: ${serverErrorMessage}`);
@@ -215,7 +224,11 @@ export default function AdminInventoryPage() {
     } else {
       let serverErrorMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}. Ensure admin authentication.`;
       const detailedDescription = serverErrorMessage.includes("permission-denied")
-        ? `${serverErrorMessage} CRITICAL: Firestore permission denied for delete. Ensure your Firestore Security Rules allow admin ('${currentUser?.email}') to delete. The rule should use '.lower()' for case-insensitive email comparison, e.g., 'request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'.`
+        ? `${serverErrorMessage} CRITICAL: Firestore permission denied for delete. 
+          TROUBLESHOOTING:
+          1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'.
+          2. FIRESTORE RULE CHECK: Ensure your Firestore Security Rules allow admin ('${currentUser?.email?.toLowerCase()}') to delete from 'stickers'. The rule should use '.lower()' for case-insensitive email comparison, e.g., 'request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'.
+          3. PUBLISH RULES & SIMULATOR: Confirm rules are published and test with Firestore Rules Simulator.`
         : serverErrorMessage;
       toast({ title: "Error Deleting Product", description: detailedDescription, variant: "destructive", duration: 10000 });
       console.error(`CLIENT: Failed to delete product ${stickerName}. Server response: ${serverErrorMessage}`);
@@ -379,5 +392,3 @@ export default function AdminInventoryPage() {
     </AdminLayout>
   );
 }
-
-
