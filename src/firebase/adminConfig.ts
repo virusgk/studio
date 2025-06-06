@@ -37,13 +37,15 @@ if (admin.apps.length === 0) {
       'Admin operations WILL FAIL without this.'
     );
     try {
+      // Attempt to initialize with Application Default Credentials (e.g., in Google Cloud environment)
       admin.initializeApp();
       console.log('FIREBASE_ADMIN_INIT: Attempted to initialize with default credentials (e.g., GOOGLE_APPLICATION_CREDENTIALS).');
       isInitialized = true;
     } catch (e: any) {
       console.error(
         "FIREBASE_ADMIN_INIT_ERROR: Failed to initialize Firebase Admin SDK with default credentials. " +
-        "Service account JSON via FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON is strongly recommended. Error: " + e.message
+        "Service account JSON via FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON is strongly recommended. Error: " + e.message,
+        e // Log the full error object
       );
     }
   } else {
@@ -52,8 +54,6 @@ if (admin.apps.length === 0) {
 
       if (serviceAccount.private_key && typeof serviceAccount.private_key === 'string') {
         const originalPrivateKey = serviceAccount.private_key;
-        // Attempt to normalize newlines in the private_key.
-        // Replace literal '\\n' with actual '\n'.
         serviceAccount.private_key = originalPrivateKey.replace(/\\n/g, '\n');
         if (serviceAccount.private_key !== originalPrivateKey) {
             console.log('FIREBASE_ADMIN_INIT: Normalized newlines in private_key from "\\\\n" to "\\n".');
@@ -61,6 +61,24 @@ if (admin.apps.length === 0) {
       } else {
         console.warn('FIREBASE_ADMIN_INIT_WARN: private_key field is missing or not a string in the parsed service account JSON.');
       }
+
+      // Log the serviceAccount object before attempting to initialize
+      console.log('FIREBASE_ADMIN_INIT_DEBUG: Parsed serviceAccount object (before initialization):', {
+        type: serviceAccount.type,
+        project_id: serviceAccount.project_id,
+        private_key_id: serviceAccount.private_key_id,
+        client_email: serviceAccount.client_email,
+        client_id: serviceAccount.client_id,
+        auth_uri: serviceAccount.auth_uri,
+        token_uri: serviceAccount.token_uri,
+        auth_provider_x509_cert_url: serviceAccount.auth_provider_x509_cert_url,
+        client_x509_cert_url: serviceAccount.client_x509_cert_url,
+        universe_domain: serviceAccount.universe_domain,
+        private_key_snippet_start: serviceAccount.private_key?.substring(0, 50),
+        private_key_snippet_end: serviceAccount.private_key?.substring(serviceAccount.private_key.length - 50),
+        private_key_length: serviceAccount.private_key?.length,
+      });
+
 
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
@@ -70,32 +88,42 @@ if (admin.apps.length === 0) {
     } catch (e: any) {
       console.error(
         'FIREBASE_ADMIN_INIT_ERROR: Failed to parse FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON or initialize Firebase Admin SDK with it. ' +
-        'Ensure the environment variable contains valid JSON and newlines are correctly escaped. Error: ' + e.message
+        'Ensure the environment variable contains valid JSON and newlines are correctly escaped. Error: ' + e.message,
+        e // Log the full error object
       );
       try {
         admin.initializeApp();
         console.warn("FIREBASE_ADMIN_INIT_WARN: Initialized Firebase Admin SDK with default credentials as fallback after SA JSON failure.");
         isInitialized = true;
       } catch (defaultInitError: any) {
-          console.error("FIREBASE_ADMIN_INIT_ERROR: Also failed to initialize Firebase Admin SDK with default credentials as fallback. Error: " + defaultInitError.message);
+          console.error("FIREBASE_ADMIN_INIT_ERROR: Also failed to initialize Firebase Admin SDK with default credentials as fallback. Error: " + defaultInitError.message, defaultInitError);
       }
     }
   }
 } else {
   console.log('Firebase Admin SDK was already initialized.');
-  isInitialized = true;
+  isInitialized = true; // Assume it was initialized correctly if admin.apps.length > 0
 }
 
 if (isInitialized && admin.apps.length > 0) {
   try {
     adminAuthInstance = admin.auth();
     adminDbInstance = admin.firestore();
-    console.log('Firebase Admin Auth and Firestore instances obtained successfully.');
+    if (adminAuthInstance && adminDbInstance) { // Check if instances were actually obtained
+        console.log('Firebase Admin Auth and Firestore instances obtained successfully.');
+    } else {
+        console.error("FIREBASE_ADMIN_INIT_ERROR: Auth or Firestore instance is null after attempted initialization.");
+        isInitialized = false; // Mark as not properly initialized
+    }
   } catch (e : any) {
-    console.error("FIREBASE_ADMIN_INIT_ERROR: Error obtaining Auth or Firestore instance after initialization: " + e.message);
+    console.error("FIREBASE_ADMIN_INIT_ERROR: Error obtaining Auth or Firestore instance after initialization: " + e.message, e);
     isInitialized = false;
   }
+} else if (!isInitialized && admin.apps.length > 0) {
+    // This case might occur if default init succeeded but subsequent instance retrieval failed
+    console.warn("FIREBASE_ADMIN_WARN: admin.apps.length > 0 but isInitialized is false. SDK might be partially initialized or in an inconsistent state.");
 }
+
 
 if(!isInitialized) {
   console.error(
@@ -107,14 +135,14 @@ if(!isInitialized) {
 }
 
 export function getAdminAuth(): admin.auth.Auth {
-  if (!adminAuthInstance) {
+  if (!adminAuthInstance || !isInitialized) {
     throw new Error("Firebase Admin Auth is not initialized. Check server startup logs for initialization errors. This usually means the FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON environment variable is missing or invalid.");
   }
   return adminAuthInstance;
 }
 
 export function getAdminDb(): admin.firestore.Firestore {
-  if (!adminDbInstance) {
+  if (!adminDbInstance || !isInitialized) {
     throw new Error("Firebase Admin Firestore is not initialized. Check server startup logs for initialization errors. This usually means the FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON environment variable is missing or invalid.");
   }
   return adminDbInstance;
