@@ -4,11 +4,11 @@
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { onAuthStateChanged, signOut as firebaseSignOut, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'; // Changed back to signInWithPopup
 import { auth, db } from '@/firebase/config';
 import type { User, Address } from '@/types';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation'; // useSearchParams to get redirect query
 
 interface AuthContextType {
   currentUser: User | null;
@@ -24,7 +24,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@stickerverse.com').trim();
+const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'hervastrajsr@gmail.com').trim();
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -32,6 +32,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userAddress, setUserAddress] = useState<Address | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams(); // Get search params
 
   useEffect(() => {
     console.log("AUTH_CONTEXT: Initializing AuthProvider effect. Current user UID (before onAuthStateChanged):", currentUser?.uid);
@@ -66,63 +67,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log("AUTH_CONTEXT: Setting loading to false after onAuthStateChanged.");
       setLoading(false);
     });
-
-    console.log("AUTH_CONTEXT: Attempting to get redirect result...");
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result && result.user) {
-          const loggedInUser = result.user;
-          console.log("AUTH_CONTEXT: Google Sign-In via redirect successful. User from result:", loggedInUser?.displayName, "UID:", loggedInUser?.uid);
-          const isUserAdminResult = loggedInUser.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
-          
-          // Temporarily set user state for faster UI update and redirect decision
-          // onAuthStateChanged will provide the definitive update shortly after.
-          const userForState: User = {
-            uid: loggedInUser.uid,
-            email: loggedInUser.email,
-            displayName: loggedInUser.displayName,
-            photoURL: loggedInUser.photoURL,
-            isAdmin: isUserAdminResult,
-          };
-          setCurrentUser(userForState); // Optimistic update
-          setIsAdmin(isUserAdminResult); // Optimistic update
-          if (userForState.uid !== 'admin-static-id') {
-            fetchAddressInternal(loggedInUser.uid); // Fetch address optimistically
-          }
-
-          const redirectPathFromStorage = sessionStorage.getItem('firebaseRedirectPathAfterLogin');
-          sessionStorage.removeItem('firebaseRedirectPathAfterLogin');
-          console.log("AUTH_CONTEXT: Retrieved and removed redirectPathAfterLogin:", redirectPathFromStorage);
-
-          if (isUserAdminResult) {
-            if (redirectPathFromStorage && redirectPathFromStorage.startsWith('/admin/') && redirectPathFromStorage !== '/login') {
-              console.log("AUTH_CONTEXT: Admin signed in (redirect result). Redirecting to stored admin path:", redirectPathFromStorage);
-              router.push(redirectPathFromStorage);
-            } else {
-              console.log("AUTH_CONTEXT: Admin signed in (redirect result). Redirecting to /admin/dashboard.");
-              router.push('/admin/dashboard');
-            }
-          } else { // Regular user
-            if (redirectPathFromStorage && redirectPathFromStorage !== '/login' && !redirectPathFromStorage.startsWith('/admin/')) {
-              console.log("AUTH_CONTEXT: User signed in (redirect result). Redirecting to stored path:", redirectPathFromStorage);
-              router.push(redirectPathFromStorage);
-            } else {
-              console.log("AUTH_CONTEXT: User signed in (redirect result). Redirecting to /profile.");
-              router.push('/profile'); 
-            }
-          }
-        } else {
-          console.log("AUTH_CONTEXT: No redirect result found (this is normal if not a redirect sign-in).");
-        }
-      })
-      .catch((error) => {
-        console.error("AUTH_CONTEXT: Error processing Google Sign-In redirect result:", error.code, error.message, error);
-      })
-      .finally(() => {
-        console.log("AUTH_CONTEXT: Finished checking for redirect result.");
-        // Loading state is primarily managed by onAuthStateChanged
-      });
-
 
     return () => {
       console.log("AUTH_CONTEXT: Unsubscribing from onAuthStateChanged.");
@@ -165,24 +109,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     try {
-      console.log("AUTH_CONTEXT: Attempting Google Sign-In with redirect...");
+      console.log("AUTH_CONTEXT: Attempting Google Sign-In with popup...");
       setLoading(true);
-      const currentPath = window.location.pathname + window.location.search;
-      // Only store a meaningful redirect path. Avoid storing '/login' itself unless it has a redirect param.
-      if (currentPath !== '/login' || window.location.search.includes('redirect=')) {
-        console.log("AUTH_CONTEXT: Storing current path for redirect:", currentPath);
-        sessionStorage.setItem('firebaseRedirectPathAfterLogin', currentPath);
+      const result = await signInWithPopup(auth, provider);
+      const loggedInUser = result.user;
+      console.log("AUTH_CONTEXT: Google Sign-In via popup successful. User:", loggedInUser?.displayName, "UID:", loggedInUser?.uid);
+      
+      // onAuthStateChanged will handle setting user state, but we can redirect here
+      const isUserAdminResult = loggedInUser.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      
+      const redirectParam = searchParams.get('redirect');
+      let redirectTo = '/';
+      if (isUserAdminResult) {
+        redirectTo = (redirectParam && redirectParam.startsWith('/admin')) ? redirectParam : '/admin/dashboard';
       } else {
-         console.log("AUTH_CONTEXT: On login page without specific redirect query, not storing path. Will default after login.");
-         sessionStorage.removeItem('firebaseRedirectPathAfterLogin'); 
+        redirectTo = (redirectParam && !redirectParam.startsWith('/admin') && redirectParam !== '/login') ? redirectParam : '/profile';
       }
-      await signInWithRedirect(auth, provider);
+      console.log(`AUTH_CONTEXT: Redirecting to ${redirectTo} after popup sign-in.`);
+      router.push(redirectTo);
+
     } catch (error: any) {
-      console.error("AUTH_CONTEXT: Google Sign-In with redirect initiation error:", error.code, error.message, error);
+      console.error("AUTH_CONTEXT: Google Sign-In with popup error:", error.code, error.message, error);
       if (error.code === 'auth/popup-blocked') {
-        alert("Popup blocked. Please allow popups for this site and try again. If the issue persists, your browser environment might be too restrictive for this sign-in method.");
+        alert("Popup blocked. Please allow popups for this site and try again.");
+      } else if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
+        console.log("AUTH_CONTEXT: Google Sign-In popup cancelled or closed by user.");
+      } else {
+        // Handle other errors
+        alert(`Sign-in error: ${error.message}`);
       }
-      setLoading(false); 
+    } finally {
+      // setLoading(false); // Let onAuthStateChanged handle the final loading state
+      console.log("AUTH_CONTEXT: Finished signInWithGoogle attempt.");
     }
   };
 
@@ -200,7 +158,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       };
       setCurrentUser(adminUser);
       setIsAdmin(true);
-      setUserAddress(null); // Static admin has no address
+      setUserAddress(null); 
       console.log("AUTH_CONTEXT: Static admin login successful.");
       setLoading(false);
       router.push('/admin/dashboard');
@@ -217,24 +175,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(true);
       const isStaticAdminLogout = currentUser?.uid === 'admin-static-id';
       
-      // Clear local user state immediately for responsiveness
       setCurrentUser(null);
       setIsAdmin(false);
       setUserAddress(null);
 
       if (isStaticAdminLogout) {
         console.log("AUTH_CONTEXT: Logging out static admin.");
-        // No Firebase sign-out needed, local state already cleared.
       } else {
         console.log("AUTH_CONTEXT: Signing out Firebase user.");
         await firebaseSignOut(auth);
-        // onAuthStateChanged will confirm final state, but local clear helps UI.
       }
       router.push('/login');
     } catch (error) {
       console.error("AUTH_CONTEXT: Logout Error:", error);
     } finally {
-      // setLoading(false) // Let onAuthStateChanged handle this after firebaseSignOut.
+      // setLoading(false); // onAuthStateChanged handles this
       console.log("AUTH_CONTEXT: Logout process finished on client.");
     }
   };
@@ -271,3 +226,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+

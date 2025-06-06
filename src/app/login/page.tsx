@@ -2,32 +2,36 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation'; // Added useSearchParams
 import { useAuth } from '@/contexts/auth-context';
 import { GoogleSignInButton } from '@/components/auth/google-signin-button';
 import { AdminLoginForm } from '@/components/auth/admin-login-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { FlameKindling, Loader2 } from 'lucide-react'; // Added Loader2
+import { FlameKindling, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const { currentUser, isAdmin, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams(); // To get redirect query param
 
   useEffect(() => {
-    // Only redirect if not loading and a user is present
     if (!loading && currentUser) {
-      if (isAdmin) {
-        console.log("LOGIN_PAGE: User is admin, redirecting to /admin/dashboard");
-        router.push('/admin/dashboard');
-      } else {
-        console.log("LOGIN_PAGE: User is not admin, redirecting to /profile");
-        router.push('/profile'); 
-      }
-    }
-  }, [currentUser, isAdmin, loading, router]);
+      const redirectParam = searchParams.get('redirect');
+      let redirectTo = '/';
 
-  // Show loading indicator if auth is loading or if a user is found (implying a redirect is imminent)
+      if (isAdmin) {
+        console.log("LOGIN_PAGE: Admin user already logged in.");
+        redirectTo = (redirectParam && redirectParam.startsWith('/admin')) ? redirectParam : '/admin/dashboard';
+      } else {
+        console.log("LOGIN_PAGE: Regular user already logged in.");
+        redirectTo = (redirectParam && !redirectParam.startsWith('/admin') && redirectParam !== '/login') ? redirectParam : '/profile';
+      }
+      console.log(`LOGIN_PAGE: Redirecting logged-in user to ${redirectTo}`);
+      router.push(redirectTo);
+    }
+  }, [currentUser, isAdmin, loading, router, searchParams]);
+
   if (loading || (!loading && currentUser)) {
     return (
       <div className="flex min-h-[calc(100vh-200px)] items-center justify-center py-12">
@@ -39,7 +43,6 @@ export default function LoginPage() {
     );
   }
 
-  // If not loading and no user, show the login form
   return (
     <div className="flex min-h-[calc(100vh-200px)] items-center justify-center py-12">
       <Card className="w-full max-w-md shadow-xl">
@@ -75,3 +78,4 @@ export default function LoginPage() {
     </div>
   );
 }
+
