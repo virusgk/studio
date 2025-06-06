@@ -1,18 +1,16 @@
 
 'use server';
-import { adminDb, adminAuth } from '@/firebase/adminConfig'; // Use Admin SDK
+import { getAdminDb, getAdminAuth, admin } from '@/firebase/adminConfig'; // Use Admin SDK
 import type { Sticker } from '@/types';
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
-// Client SDK 'db' can still be used for reads if desired, but writes should use Admin SDK for consistency in server actions
+// Client SDK 'db' can still be used for reads if desired
 import { db } from '@/firebase/config'; 
 const stickersCollectionRef = collection(db, 'stickers'); // For reads by anyone
-const adminStickersCollectionRef = adminDb.collection('stickers'); // For admin writes
 
 
 export async function getStickersFromDB(): Promise<Sticker[]> {
   try {
-    // Reading stickers can still use client SDK as it's public access defined by rules
     const q = query(stickersCollectionRef, orderBy('name'));
     const data = await getDocs(q);
     const stickers = data.docs.map((doc) => {
@@ -35,6 +33,8 @@ async function verifyAdmin(idToken: string): Promise<string | null> {
     return null;
   }
   try {
+    const adminAuth = getAdminAuth();
+    const adminDb = getAdminDb();
     const decodedToken = await adminAuth.verifyIdToken(idToken);
     const uid = decodedToken.uid;
     const userDocRef = adminDb.collection('users').doc(uid);
@@ -62,10 +62,12 @@ export async function addStickerToDB(idToken: string, stickerData: Omit<Sticker,
 
   console.log("SERVER: ADD_STICKER_TO_DB: Admin verified. Received sticker data for add:", JSON.stringify(stickerData, null, 2));
   try {
+    const adminDb = getAdminDb();
+    const adminStickersCollectionRef = adminDb.collection('stickers');
     const dataWithTimestamps = {
       ...stickerData,
-      // createdAt: admin.firestore.FieldValue.serverTimestamp(), // Using Admin SDK timestamp
-      // updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(), 
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
     const docRef = await adminStickersCollectionRef.add(dataWithTimestamps);
     console.log("SERVER: ADD_STICKER_TO_DB: Sticker added successfully using Admin SDK. Document ID:", docRef.id);
@@ -89,10 +91,11 @@ export async function updateStickerInDB(idToken: string, stickerId: string, stic
 
   console.log("SERVER: UPDATE_STICKER_IN_DB: Admin verified. Received sticker data for update:", JSON.stringify(stickerData, null, 2));
   try {
-    const stickerDocRef = adminStickersCollectionRef.doc(stickerId);
+    const adminDb = getAdminDb();
+    const stickerDocRef = adminDb.collection('stickers').doc(stickerId);
     const dataWithTimestamps = {
       ...stickerData,
-      // updatedAt: admin.firestore.FieldValue.serverTimestamp(), // Using Admin SDK timestamp
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(), 
     };
     await stickerDocRef.update(dataWithTimestamps);
     console.log("SERVER: UPDATE_STICKER_IN_DB: Sticker updated successfully using Admin SDK for ID:", stickerId);
@@ -116,7 +119,8 @@ export async function deleteStickerFromDB(idToken: string, stickerId: string): P
   
   console.log("SERVER: DELETE_STICKER_FROM_DB: Admin verified. Attempting to delete document with ID:", stickerId);
   try {
-    const stickerDocRef = adminStickersCollectionRef.doc(stickerId);
+    const adminDb = getAdminDb();
+    const stickerDocRef = adminDb.collection('stickers').doc(stickerId);
     await stickerDocRef.delete();
     console.log("SERVER: DELETE_STICKER_FROM_DB: Sticker deleted successfully using Admin SDK for ID:", stickerId);
     return true;

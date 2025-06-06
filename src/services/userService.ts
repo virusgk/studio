@@ -1,12 +1,11 @@
 
 'use server';
-import { adminDb, adminAuth } from '@/firebase/adminConfig'; // Use Admin SDK
+import { getAdminDb, getAdminAuth, admin } from '@/firebase/adminConfig'; // Use Admin SDK getters
 import type { UserDocument } from '@/types';
-import { collection, getDocs, doc, updateDoc, query, orderBy } from 'firebase/firestore'; // client SDK for reads
+import { collection, getDocs, query, orderBy } from 'firebase/firestore'; // client SDK for reads
 import { db } from '@/firebase/config'; // client SDK 'db'
 
 const usersCollectionRef = collection(db, 'users'); // For client-side reads if any, or public reads
-const adminUsersCollectionRef = adminDb.collection('users'); // For admin writes/reads
 
 async function verifyAdmin(idToken: string): Promise<string | null> {
   if (!idToken) {
@@ -14,9 +13,11 @@ async function verifyAdmin(idToken: string): Promise<string | null> {
     return null;
   }
   try {
+    const adminAuth = getAdminAuth();
+    const adminDb = getAdminDb();
     const decodedToken = await adminAuth.verifyIdToken(idToken);
     const uid = decodedToken.uid;
-    const userDocRef = adminUsersCollectionRef.doc(uid); // Use adminDb here
+    const userDocRef = adminDb.collection('users').doc(uid); 
     const userDocSnap = await userDocRef.get();
     if (!userDocSnap.exists() || userDocSnap.data()?.role !== 'admin') {
       console.error(`SERVER_ACTION_AUTH_USER_SVC: User ${uid} is not authorized (not found or not admin). Role: ${userDocSnap.data()?.role}`);
@@ -30,9 +31,6 @@ async function verifyAdmin(idToken: string): Promise<string | null> {
   }
 }
 
-// Reading all users might still be fine with client SDK if rules allow admin read,
-// but for consistency and if more sensitive data is read, Admin SDK might be preferred.
-// For now, keeping client SDK read as it's simpler if rules permit.
 export async function getAllUsers(): Promise<UserDocument[]> {
   try {
     const q = query(usersCollectionRef, orderBy('email')); 
@@ -68,8 +66,12 @@ export async function updateUserRole(idToken: string, userId: string, newRole: '
 
   console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: Admin ${adminUid} verified. Proceeding to update role for ${userId}.`);
   try {
-    const userDocRef = adminUsersCollectionRef.doc(userId);
-    const updatePayload = { role: newRole };
+    const adminDb = getAdminDb();
+    const userDocRef = adminDb.collection('users').doc(userId);
+    const updatePayload = { 
+      role: newRole,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp() // Add updatedAt timestamp
+    };
     
     await userDocRef.update(updatePayload);
     
