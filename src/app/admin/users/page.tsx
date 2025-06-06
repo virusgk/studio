@@ -90,20 +90,22 @@ export default function AdminUsersPage() {
     } else {
       let detailedDescription = typeof result === 'string' ? result : "Could not update user role. Ensure you are a dynamic admin and your service account for server actions is correctly configured.";
       
-      if (typeof result === 'string' && result.includes("User is not authorized")) {
-         detailedDescription = `ADMIN AUTHORIZATION FAILED (Server Action): ${result}\n\n` +
-        `This means the server action determined that your account ('${currentUser?.email}') is not an admin, or your ID token was invalid.\n\n` +
-        `TROUBLESHOOTING CHECKLIST:\n` +
-        `1. **VERIFY YOUR ADMIN ROLE IN FIRESTORE:**\n` +
-        `   - Go to Firebase Console > Firestore Database > 'users' collection.\n` +
-        `   - Find document with ID: '${currentUser?.uid}'.\n` +
-        `   - **Ensure this document has 'role' field with exact string 'admin' (lowercase).** This is critical for the server action's admin check.\n` +
-        `2. **FIREBASE ADMIN SDK INITIALIZATION:**\n` +
-        `   - Ensure 'FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON' env variable is correctly set with your service account key for server actions.\n` +
-        `   - Check server logs for 'Firebase Admin SDK initialized successfully' or any errors from 'src/firebase/adminConfig.ts'.\n` +
-        `3. **ID TOKEN VALIDITY:** If you recently changed password/roles, try logging out and back in to refresh your ID token.\n` +
-        `4. **FIRESTORE RULES (Less likely for this specific error, but good to check):** The Admin SDK bypasses rules, but if the logic *inside* the server action reads user roles using client SDK by mistake, rules would apply. Our current server actions use Admin SDK for this check.`;
+      if (typeof result === 'string' && result.includes("DYNAMIC ADMIN PERMISSION DENIED")) {
+         detailedDescription = result; // Use the detailed message from the service
+      } else if (typeof result === 'string' && result.includes("Server Action Error: User is not authorized to perform this admin operation")) {
+        detailedDescription = result + "\n\n" +
+          `TROUBLESHOOTING CHECKLIST for '${currentUser?.email}':\n` +
+          `1. **VERIFY YOUR ADMIN ROLE IN FIRESTORE:**\n` +
+          `   - Go to Firebase Console > Firestore Database > 'users' collection.\n` +
+          `   - Find document for UID: '${currentUser?.uid}'.\n` +
+          `   - **Ensure this document has field 'role' with *exact string value "admin"* (lowercase, no spaces).** This is CRITICAL.\n` +
+          `2. **FIREBASE ADMIN SDK INITIALIZATION:**\n` +
+          `   - Ensure 'FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON' env variable is correctly set in your .env file with your service account key.\n` +
+          `   - Check server startup logs for 'Firebase Admin SDK initialized successfully' or any errors from 'src/firebase/adminConfig.ts'. Restart server after .env changes.\n` +
+          `3. **ID TOKEN VALIDITY:** If you recently changed roles, try logging out and back in to refresh your ID token.\n` +
+          `4. **FIRESTORE RULES (If Admin SDK error):** While Admin SDK usually bypasses rules, ensure your general Firestore setup is sound. Primarily focus on points 1-3 for this error.`;
       }
+
 
       toast({
         title: "Error Updating Role",
@@ -144,7 +146,7 @@ export default function AdminUsersPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline">All Users</CardTitle>
-            <CardDescription className="font-body">View and manage user roles. Role changes require a dynamic admin (Google authenticated with 'role: "admin"' in Firestore) and properly configured server actions with Firebase Admin SDK.</CardDescription>
+            <CardDescription className="font-body">View and manage user roles. Role changes require a dynamic admin (Google authenticated user with 'role: "admin"' in Firestore) and correctly configured Firebase Admin SDK with service account credentials for server actions.</CardDescription>
           </CardHeader>
           <CardContent>
             {users.length === 0 ? (
@@ -208,7 +210,7 @@ export default function AdminUsersPage() {
                               <AlertDialogTitle>Confirm Role Change</AlertDialogTitle>
                               <AlertDialogDescription>
                                 Are you sure you want to change the role of <strong>{user.displayName || user.email}</strong> to <strong>{user.role === 'admin' ? 'User' : 'Admin'}</strong>?
-                                {user.uid === currentUser?.uid && user.role === 'admin' && newRole === 'user' && (
+                                {user.uid === currentUser?.uid && user.role === 'admin' && (
                                   <p className="mt-2 text-destructive font-semibold">Warning: You are about to change your own role to User! You will lose admin privileges.</p>
                                 )}
                               </AlertDialogDescription>
