@@ -26,6 +26,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import AdminLayout from "../layout"; // Assuming this layout checks auth
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 // Placeholder for ProductForm - would be a more complex component
 // import { ProductForm } from '@/components/admin/product-form'; 
 
