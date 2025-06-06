@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import type { Sticker } from '@/types';
 // MOCK_STICKERS is no longer the primary source of data
-// import { MOCK_STICKERS } from '@/data/sticker-data'; 
+// import { MOCK_STICKERS } from '@/data/sticker-data';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PlusCircle, Edit3, Trash2, Search, PackageOpen, Image as ImageIcon, Loader2 } from 'lucide-react';
@@ -17,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
-import NextImage from 'next/image'; 
+import NextImage from 'next/image';
 import {
   Dialog,
   DialogContent,
@@ -27,7 +27,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import AdminLayout from "../layout"; 
+import AdminLayout from "../layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProductForm } from '@/components/admin/product-form';
 import { useToast } from '@/hooks/use-toast';
@@ -44,11 +44,13 @@ export default function AdminInventoryPage() {
   const [editingSticker, setEditingSticker] = useState<Sticker | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const { currentUser } = useAuth(); // Get currentUser for logging
+  const { currentUser, isAdmin } = useAuth(); // Get currentUser for logging
 
   const fetchStickers = async () => {
     setIsLoadingDB(true);
+    console.log("Fetching stickers from DB...");
     const dbStickers = await getStickersFromDB();
+    console.log("Fetched stickers:", dbStickers);
     setStickers(dbStickers);
     setIsLoadingDB(false);
   };
@@ -67,16 +69,21 @@ export default function AdminInventoryPage() {
   };
 
   const handleSaveProduct = async (
-    formData: Omit<Sticker, 'id' | 'tags' | 'imageUrls' | 'videoUrls' | 'availableMaterials'> & { id?: string; tags?: string; category?: string; availableMaterials: string[]; imageUrls?: string[]; videoUrls?: string[] }, 
-    imageFiles: File[], 
+    formData: Omit<Sticker, 'id' | 'tags' | 'imageUrls' | 'videoUrls' | 'availableMaterials'> & { id?: string; tags?: string; category?: string; availableMaterials: string[]; imageUrls?: string[]; videoUrls?: string[] },
+    imageFiles: File[],
     videoFiles: File[]
   ) => {
     setIsSubmitting(true);
-    console.log("Attempting to save product. Current user from useAuth:", currentUser); // Log currentUser
-    
+    console.log("--- Attempting to save product ---");
+    console.log("Current user from useAuth:", currentUser);
+    console.log("Is Admin (from useAuth):", isAdmin);
+    console.log("Raw form data received:", formData);
+    console.log("Image files selected:", imageFiles.map(f => f.name));
+    console.log("Video files selected:", videoFiles.map(f => f.name));
+
     // This part remains client-side simulation for URL generation
     // In a real app, upload files to Firebase Storage here and get actual URLs
-    const newImageUrls = [...(formData.imageUrls || [])]; 
+    const newImageUrls = [...(formData.imageUrls || [])];
     if (imageFiles.length > 0) {
         newImageUrls.push(...imageFiles.map(f => `https://placehold.co/100x100.png?text=New+Img-${f.name.substring(0,3)}`));
     }
@@ -86,6 +93,7 @@ export default function AdminInventoryPage() {
     }
 
     const stickerTags: string[] = formData.tags ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0) : [];
+    console.log("Processed sticker tags:", stickerTags);
 
     const stickerDataPayload = {
         name: formData.name,
@@ -98,48 +106,65 @@ export default function AdminInventoryPage() {
         imageUrls: newImageUrls,
         videoUrls: newVideoUrls,
     };
+    console.log("Sticker data payload to be sent to DB service:", stickerDataPayload);
 
     let success = false;
-    let newId: string | null = null;
+    let operationType = editingSticker && formData.id ? "update" : "add";
 
-    if (editingSticker && formData.id) {
-      // Update existing sticker
-      success = await updateStickerInDB(formData.id, stickerDataPayload);
-      if (success) {
-        toast({ title: "Product Updated", description: `${formData.name} has been updated.` });
+    try {
+      if (operationType === "update" && formData.id) {
+        console.log(`Attempting to update sticker with ID: ${formData.id}`);
+        success = await updateStickerInDB(formData.id, stickerDataPayload);
+        if (success) {
+          toast({ title: "Product Updated", description: `${formData.name} has been updated.` });
+          console.log(`Product ${formData.name} updated successfully.`);
+        } else {
+          toast({ title: "Error", description: `Failed to update ${formData.name}.`, variant: "destructive" });
+          console.error(`Failed to update product ${formData.name}. updateStickerInDB returned false.`);
+        }
       } else {
-        toast({ title: "Error", description: `Failed to update ${formData.name}.`, variant: "destructive" });
+        console.log(`Attempting to add new sticker: ${formData.name}`);
+        const newId = await addStickerToDB(stickerDataPayload as Omit<Sticker, 'id'>);
+        if (newId) {
+          success = true;
+          toast({ title: "Product Added", description: `${formData.name} has been added.` });
+          console.log(`Product ${formData.name} added successfully with ID: ${newId}.`);
+        } else {
+          toast({ title: "Error", description: `Failed to add ${formData.name}.`, variant: "destructive" });
+          console.error(`Failed to add product ${formData.name}. addStickerToDB returned null.`);
+        }
       }
-    } else {
-      // Add new sticker
-      newId = await addStickerToDB(stickerDataPayload as Omit<Sticker, 'id'>);
-      if (newId) {
-        success = true;
-        toast({ title: "Product Added", description: `${formData.name} has been added.` });
-      } else {
-        toast({ title: "Error", description: `Failed to add ${formData.name}.`, variant: "destructive" });
-      }
+    } catch (error: any) {
+      console.error(`CRITICAL ERROR during ${operationType} product ${formData.name}:`, error);
+      toast({ title: "Critical Error", description: `An unexpected error occurred while ${operationType === "update" ? "updating" : "adding"} ${formData.name}. Message: ${error.message || 'Unknown error'}. Check console.`, variant: "destructive", duration: 7000 });
+      success = false; // Ensure success is false on critical error
     }
+
 
     if (success) {
       await fetchStickers(); // Refresh list from DB
     }
-    
+
     setIsSubmitting(false);
     setIsFormOpen(false);
     setEditingSticker(null);
+    console.log("--- Product save attempt finished ---");
   };
-  
+
   const handleDeleteProduct = async (stickerId: string, stickerName: string) => {
     setIsSubmitting(true); // Use general submitting state or a specific deleting state
+    console.log(`--- Attempting to delete product ID: ${stickerId}, Name: ${stickerName} ---`);
     const success = await deleteStickerFromDB(stickerId);
     if (success) {
       toast({ title: "Product Deleted", description: `${stickerName} has been removed.` });
+      console.log(`Product ${stickerName} deleted successfully.`);
       await fetchStickers(); // Refresh list
     } else {
       toast({ title: "Error Deleting", description: `Could not remove ${stickerName}.`, variant: "destructive" });
+      console.error(`Failed to delete product ${stickerName}. deleteStickerFromDB returned false.`);
     }
     setIsSubmitting(false);
+    console.log("--- Product delete attempt finished ---");
   };
 
   if (isLoadingDB) {
@@ -165,7 +190,7 @@ export default function AdminInventoryPage() {
 
         <Dialog open={isFormOpen} onOpenChange={(open) => {
             if (!open) {
-                setEditingSticker(null); 
+                setEditingSticker(null);
             }
             setIsFormOpen(open);
         }}>
@@ -176,7 +201,7 @@ export default function AdminInventoryPage() {
                         {editingSticker ? `Update details for ${editingSticker.name}.` : 'Fill in the details for the new sticker.'}
                     </DialogDescription>
                 </DialogHeader>
-                <ProductForm 
+                <ProductForm
                     sticker={editingSticker}
                     onSave={handleSaveProduct as any} // Cast due to simplified formData type in this component
                     onCancel={() => {
@@ -275,8 +300,8 @@ export default function AdminInventoryPage() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={() => handleDeleteProduct(sticker.id, sticker.name)} 
+                          <AlertDialogAction
+                            onClick={() => handleDeleteProduct(sticker.id, sticker.name)}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             disabled={isSubmitting}
                           >
