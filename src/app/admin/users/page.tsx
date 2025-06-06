@@ -65,7 +65,7 @@ export default function AdminUsersPage() {
     if (currentUser?.uid === 'admin-static-id') {
       toast({
         title: "Operation Not Permitted for Static Admin",
-        description: "The static admin (admin/admin) cannot change user roles. This action requires a dynamic admin (a user logged in with Google who has 'role: admin' in their Firestore document).\n\n" +
+        description: "The static admin (admin/admin) cannot change user roles. This action requires a dynamic admin (a user logged in with Google who has 'role: \"admin\"' in their Firestore document).\n\n" +
                      "TO CREATE YOUR FIRST DYNAMIC ADMIN:\n" +
                      "1. LOGIN AS GOOGLE USER: Ensure the target user has logged into the app at least once with Google.\n" +
                      "2. MANUAL FIRESTORE EDIT: Go to Firebase Console > Firestore Database > 'users' collection. Find the user's document and change their 'role' field from 'user' to 'admin'.\n" +
@@ -90,20 +90,23 @@ export default function AdminUsersPage() {
       
       if (typeof result === 'string' && result.includes("permission-denied")) {
          detailedDescription = `DYNAMIC ADMIN PERMISSION DENIED: ${result}\n\n` +
-        `This means your Firestore rules are not allowing your account ('${currentUser?.email}') to update other user roles.\n\n` +
+        `This means your Firestore rules are not allowing YOUR account ('${currentUser?.email}', UID: '${currentUser?.uid}') to update other user roles.\n\n` +
         `TROUBLESHOOTING CHECKLIST (for 'match /users/{userId}'):\n` +
-        `1. VERIFY YOUR ROLE: Ensure your user document ('users/${currentUser?.uid}') in Firestore has the field 'role' set to the string 'admin'.\n` +
-        `2. FIRESTORE RULE CHECK: The 'allow update' rule for admins modifying roles should be similar to:\n` +
-        `   'allow update: if ... (request.auth != null && exists(...) && get(...).data.role == "admin" && request.writeFields.hasAny(["role", "lastLogin"]) && request.writeFields.size() <= 2) ... ;'\n` +
-        `3. PUBLISH RULES: Changes to Firestore rules must be PUBLISHED.\n` +
-        `4. SIMULATOR: Test an 'update' on 'users/someOtherUserId' using your admin UID. Request data: {'role': 'admin'}.`;
+        `1. **CRITICAL: VERIFY YOUR ADMIN ROLE IN FIRESTORE.**\n` +
+        `   - Go to Firebase Console > Firestore Database > 'users' collection.\n` +
+        `   - Find the document with ID: '${currentUser?.uid}'.\n` +
+        `   - **Ensure this document has a field named 'role' with the exact string value 'admin'.** (lowercase, no typos). This is the most common cause of this error.\n` +
+        `2. FIRESTORE RULE CHECK: The 'allow update' rule for admins modifying roles (specifically Case 2 in your rules for '/users/{userId}') should be:\n` +
+        `   '... get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin" && request.writeFields.hasAny(["role", "lastLogin"]) && request.writeFields.size() <= 2 ... ;'\n` +
+        `3. PUBLISH RULES: Changes to Firestore rules in the Firebase Console must be PUBLISHED to take effect.\n` +
+        `4. SIMULATOR: In Firebase Console, use the Firestore Rules Simulator. Test an 'update' on path 'users/someOtherUserUID' using your admin UID ('${currentUser?.uid}'). The request data should be {'role': '${newRole}'}. It should show 'Simulated write allowed'.`;
       }
 
       toast({
         title: "Error Updating Role",
         description: detailedDescription,
         variant: "destructive",
-        duration: 20000, 
+        duration: 25000, 
       });
     }
     setIsUpdatingRole(null);
@@ -233,3 +236,4 @@ export default function AdminUsersPage() {
     </AdminLayout>
   );
 }
+
