@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -139,7 +140,10 @@ export default function AdminInventoryPage() {
           console.log(`CLIENT: Product ${formData.name} updated successfully.`);
         } else {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to update product. Ensure admin authentication.";
-          toast({ title: "Error Updating Product", description: serverErrorMessage, variant: "destructive", duration: 7000 });
+          const detailedDescription = serverErrorMessage.includes("permission-denied")
+            ? `${serverErrorMessage} Please double-check your Firestore Security Rules and ensure the admin email '${currentUser?.email}' matches the email specified in the rules for write access to the 'stickers' collection.`
+            : serverErrorMessage;
+          toast({ title: "Error Updating Product", description: detailedDescription, variant: "destructive", duration: 9000 });
           console.error(`CLIENT: Failed to update product ${formData.name}. Server response: ${serverErrorMessage}`);
         }
       } else {
@@ -151,7 +155,10 @@ export default function AdminInventoryPage() {
           console.log(`CLIENT: Product ${formData.name} added successfully with ID: ${result}.`);
         } else {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to add product. Ensure admin authentication.";
-          toast({ title: "Error Adding Product", description: serverErrorMessage, variant: "destructive", duration: 7000 });
+          const detailedDescription = serverErrorMessage.includes("permission-denied")
+            ? `${serverErrorMessage} Please double-check your Firestore Security Rules and ensure the admin email '${currentUser?.email}' matches the email specified in the rules for write access to the 'stickers' collection.`
+            : serverErrorMessage;
+          toast({ title: "Error Adding Product", description: detailedDescription, variant: "destructive", duration: 9000 });
           console.error(`CLIENT: Failed to add product ${formData.name}. Server response: ${serverErrorMessage}`);
         }
       }
@@ -159,7 +166,7 @@ export default function AdminInventoryPage() {
       serverErrorMessage = `An unexpected error occurred on the client. Message: ${error.message || 'Unknown error'}.`;
       console.error(`CLIENT: CRITICAL ERROR during ${operationType} product ${formData.name}:`, error);
       toast({ title: "Critical Client Error", description: serverErrorMessage, variant: "destructive", duration: 7000 });
-      success = false; 
+      success = false;
     }
 
 
@@ -174,7 +181,7 @@ export default function AdminInventoryPage() {
   };
 
   const handleDeleteProduct = async (stickerId: string, stickerName: string) => {
-    setIsSubmitting(true); 
+    setIsSubmitting(true);
     console.log(`CLIENT: --- Attempting to delete product ID: ${stickerId}, Name: ${stickerName} ---`);
     if (currentUser?.uid === 'admin-static-id') {
         const errorMsg = "Static admin account cannot delete from the database. Please use Google Sign-In.";
@@ -193,10 +200,13 @@ export default function AdminInventoryPage() {
     if (result === true) {
       toast({ title: "Product Deleted", description: `${stickerName} has been removed.` });
       console.log(`CLIENT: Product ${stickerName} deleted successfully.`);
-      await fetchStickers(); 
+      await fetchStickers();
     } else {
-      const serverErrorMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}. Ensure admin authentication.`;
-      toast({ title: "Error Deleting Product", description: serverErrorMessage, variant: "destructive", duration: 7000 });
+      let serverErrorMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}. Ensure admin authentication.`;
+      const detailedDescription = serverErrorMessage.includes("permission-denied")
+        ? `${serverErrorMessage} Ensure your Firestore Security Rules allow admins ('${currentUser?.email}') to delete from the 'stickers' collection.`
+        : serverErrorMessage;
+      toast({ title: "Error Deleting Product", description: detailedDescription, variant: "destructive", duration: 9000 });
       console.error(`CLIENT: Failed to delete product ${stickerName}. Server response: ${serverErrorMessage}`);
     }
     setIsSubmitting(false);
