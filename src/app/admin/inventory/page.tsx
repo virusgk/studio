@@ -3,8 +3,6 @@
 
 import { useState, useEffect } from 'react';
 import type { Sticker } from '@/types';
-// MOCK_STICKERS is no longer the primary source of data
-// import { MOCK_STICKERS } from '@/data/sticker-data';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PlusCircle, Edit3, Trash2, Search, PackageOpen, Image as ImageIcon, Loader2 } from 'lucide-react';
@@ -44,13 +42,11 @@ export default function AdminInventoryPage() {
   const [editingSticker, setEditingSticker] = useState<Sticker | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const { currentUser, isAdmin } = useAuth();
+  const { currentUser, isAdmin, getIdToken } = useAuth();
 
   const fetchStickers = async () => {
     setIsLoadingDB(true);
-    console.log("CLIENT: Fetching stickers from DB...");
     const dbStickers = await getStickersFromDB();
-    console.log("CLIENT: Fetched stickers:", dbStickers);
     setStickers(dbStickers);
     setIsLoadingDB(false);
   };
@@ -74,37 +70,23 @@ export default function AdminInventoryPage() {
     videoFiles: File[]
   ) => {
     setIsSubmitting(true);
-    console.log("CLIENT: --- Attempting to save product ---");
-    console.log("CLIENT: Current user from useAuth (at save point):", JSON.stringify(currentUser, null, 2));
-    console.log("CLIENT: Current user email from useAuth (at save point):", currentUser?.email);
-    console.log("CLIENT: Is Admin (from useAuth, at save point):", isAdmin);
-    console.log("CLIENT: Raw form data received:", formData);
-    console.log("CLIENT: Image files selected:", imageFiles.map(f => f.name));
-    console.log("CLIENT: Video files selected:", videoFiles.map(f => f.name));
-
-    if (currentUser?.uid === 'admin-static-id') {
-        const errorMsg = "Static admin (admin/admin) cannot save products to the database. This action requires a dynamic admin (a user logged in with Google who has 'role: admin' in their Firestore document).\n\n" +
-                         "TO CREATE YOUR FIRST DYNAMIC ADMIN:\n" +
-                         "1. LOGIN AS GOOGLE USER: Ensure the target user has logged into the app at least once with Google.\n" +
-                         "2. MANUAL FIRESTORE EDIT: Go to Firebase Console > Firestore Database > 'users' collection. Find the user's document and change their 'role' field from 'user' to 'admin'.\n" +
-                         "3. LOGIN AS DYNAMIC ADMIN: Log out, then log back in as that Google user. They can now manage inventory.";
-        console.error("CLIENT: " + errorMsg);
-        toast({
-            title: "Operation Not Permitted for Static Admin",
-            description: errorMsg,
-            variant: "destructive",
-            duration: 20000,
-        });
+    
+    const idToken = await getIdToken();
+    if (!idToken) {
+        toast({ title: "Authentication Error", description: "Could not get authentication token. Please log in again.", variant: "destructive", duration: 7000 });
         setIsSubmitting(false);
-        setIsFormOpen(false);
-        setEditingSticker(null);
-        console.log("CLIENT: --- Product save attempt finished (aborted due to static admin) ---");
         return;
     }
 
+    if (currentUser?.uid === 'admin-static-id') {
+        const errorMsg = "Static admin (admin/admin) cannot save products. This action requires a dynamic admin (Google authenticated user with 'role: admin').";
+        toast({ title: "Operation Not Permitted", description: errorMsg, variant: "destructive", duration: 10000 });
+        setIsSubmitting(false);
+        setIsFormOpen(false);
+        setEditingSticker(null);
+        return;
+    }
 
-    // This part remains client-side simulation for URL generation
-    // In a real app, upload files to Firebase Storage here and get actual URLs
     const newImageUrls = [...(formData.imageUrls || [])];
     if (imageFiles.length > 0) {
         newImageUrls.push(...imageFiles.map(f => `https://placehold.co/100x100.png?text=New+Img-${f.name.substring(0,3)}`));
@@ -115,8 +97,7 @@ export default function AdminInventoryPage() {
     }
 
     const stickerTags: string[] = formData.tags ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0) : [];
-    console.log("CLIENT: Processed sticker tags:", stickerTags);
-
+    
     const stickerDataPayload = {
         name: formData.name,
         description: formData.description,
@@ -128,65 +109,37 @@ export default function AdminInventoryPage() {
         imageUrls: newImageUrls,
         videoUrls: newVideoUrls,
     };
-    console.log("CLIENT: Sticker data payload to be sent to DB service:", stickerDataPayload);
 
     let success = false;
     let operationType = editingSticker && formData.id ? "update" : "add";
-    let serverErrorMessage: string | null = null;
+    let serverResponseMessage: string | null = null;
 
     try {
       if (operationType === "update" && formData.id) {
-        console.log(`CLIENT: Attempting to update sticker with ID: ${formData.id}`);
-        const result = await updateStickerInDB(formData.id, stickerDataPayload);
+        const result = await updateStickerInDB(idToken, formData.id, stickerDataPayload);
         if (result === true) {
           success = true;
           toast({ title: "Product Updated", description: `${formData.name} has been updated.` });
-          console.log(`CLIENT: Product ${formData.name} updated successfully.`);
         } else {
-          serverErrorMessage = typeof result === 'string' ? result : "Failed to update product.";
-           const detailedDescription = serverErrorMessage.includes("permission-denied")
-            ? `FIRESTORE PERMISSION DENIED: ${serverErrorMessage}\n\n` +
-              `This means your Firestore rules are not allowing your account ('${currentUser?.email}') to update products.\n\n` +
-              `TROUBLESHOOTING CHECKLIST (for 'match /stickers/{stickerId}'):\n` +
-              `1. VERIFY YOUR ROLE: Ensure your user document ('users/${currentUser?.uid}') in Firestore has the field 'role' set to the string 'admin'.\n` +
-              `2. FIRESTORE RULE CHECK: The 'allow write' rule for stickers should be:\n` +
-              `   'allow write: if request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";'\n` +
-              `3. PUBLISH RULES: Changes to Firestore rules must be PUBLISHED.\n` +
-              `4. SIMULATOR: Test an 'update' on 'stickers/${formData.id}' by your admin UID. It should show 'Simulated write allowed'.`
-            : serverErrorMessage;
-          toast({ title: "Error Updating Product", description: detailedDescription, variant: "destructive", duration: 15000 });
-          console.error(`CLIENT: Failed to update product ${formData.name}. Server response: ${serverErrorMessage}`);
+          serverResponseMessage = typeof result === 'string' ? result : "Failed to update product.";
+          toast({ title: "Error Updating Product", description: serverResponseMessage, variant: "destructive", duration: 10000 });
         }
       } else {
-        console.log(`CLIENT: Attempting to add new sticker: ${formData.name}`);
-        const result = await addStickerToDB(stickerDataPayload as Omit<Sticker, 'id'>);
+        const result = await addStickerToDB(idToken, stickerDataPayload as Omit<Sticker, 'id'>);
         if (result && !result.startsWith('Server Error:')) {
           success = true;
           toast({ title: "Product Added", description: `${formData.name} has been added.` });
-          console.log(`CLIENT: Product ${formData.name} added successfully with ID: ${result}.`);
         } else {
-          serverErrorMessage = typeof result === 'string' ? result : "Failed to add product.";
-           const detailedDescription = serverErrorMessage.includes("permission-denied")
-            ? `FIRESTORE PERMISSION DENIED: ${serverErrorMessage}\n\n` +
-              `This means your Firestore rules are not allowing your account ('${currentUser?.email}') to add products.\n\n` +
-              `TROUBLESHOOTING CHECKLIST (for 'match /stickers/{stickerId}'):\n` +
-              `1. VERIFY YOUR ROLE: Ensure your user document ('users/${currentUser?.uid}') in Firestore has the field 'role' set to the string 'admin'.\n` +
-              `2. FIRESTORE RULE CHECK: The 'allow write' (which covers create) rule for stickers should be:\n` +
-              `   'allow write: if request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";'\n` +
-              `3. PUBLISH RULES: Changes to Firestore rules must be PUBLISHED.\n` +
-              `4. SIMULATOR: Test a 'create' on 'stickers/someNewId' by your admin UID. It should show 'Simulated write allowed'.`
-            : serverErrorMessage;
-          toast({ title: "Error Adding Product", description: detailedDescription, variant: "destructive", duration: 15000 });
-          console.error(`CLIENT: Failed to add product ${formData.name}. Server response: ${serverErrorMessage}`);
+          serverResponseMessage = typeof result === 'string' ? result : "Failed to add product.";
+          toast({ title: "Error Adding Product", description: serverResponseMessage, variant: "destructive", duration: 10000 });
         }
       }
     } catch (error: any) {
-      serverErrorMessage = `An unexpected error occurred on the client. Message: ${error.message || 'Unknown error'}.`;
+      serverResponseMessage = `An unexpected client-side error occurred. Message: ${error.message || 'Unknown error'}.`;
       console.error(`CLIENT: CRITICAL ERROR during ${operationType} product ${formData.name}:`, error);
-      toast({ title: "Critical Client Error", description: serverErrorMessage, variant: "destructive", duration: 7000 });
+      toast({ title: "Critical Client Error", description: serverResponseMessage, variant: "destructive", duration: 7000 });
       success = false;
     }
-
 
     if (success) {
       await fetchStickers();
@@ -195,49 +148,33 @@ export default function AdminInventoryPage() {
     setIsSubmitting(false);
     setIsFormOpen(false);
     setEditingSticker(null);
-    console.log("CLIENT: --- Product save attempt finished ---");
   };
 
   const handleDeleteProduct = async (stickerId: string, stickerName: string) => {
     setIsSubmitting(true);
-    console.log(`CLIENT: --- Attempting to delete product ID: ${stickerId}, Name: ${stickerName} ---`);
-    console.log("CLIENT: Current user from useAuth (at delete point):", JSON.stringify(currentUser, null, 2));
-    console.log("CLIENT: Current user email from useAuth (at delete point):", currentUser?.email);
-    console.log("CLIENT: Is Admin (from useAuth, at delete point):", isAdmin);
-
-    if (currentUser?.uid === 'admin-static-id') {
-        const errorMsg = "Static admin (admin/admin) cannot delete products. This action requires a dynamic admin.\n\nSee product add/edit messages for how to create a dynamic admin.";
-        console.error("CLIENT: " + errorMsg);
-        toast({
-            title: "Operation Not Permitted for Static Admin",
-            description: errorMsg,
-            variant: "destructive",
-            duration: 15000,
-        });
+    const idToken = await getIdToken();
+    if (!idToken) {
+        toast({ title: "Authentication Error", description: "Could not get authentication token. Please log in again.", variant: "destructive", duration: 7000 });
         setIsSubmitting(false);
         return;
     }
 
-    const result = await deleteStickerFromDB(stickerId);
+    if (currentUser?.uid === 'admin-static-id') {
+        const errorMsg = "Static admin (admin/admin) cannot delete products. This action requires a dynamic admin.";
+        toast({ title: "Operation Not Permitted", description: errorMsg, variant: "destructive", duration: 10000 });
+        setIsSubmitting(false);
+        return;
+    }
+
+    const result = await deleteStickerFromDB(idToken, stickerId);
     if (result === true) {
       toast({ title: "Product Deleted", description: `${stickerName} has been removed.` });
-      console.log(`CLIENT: Product ${stickerName} deleted successfully.`);
       await fetchStickers();
     } else {
-      let serverErrorMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}.`;
-      const detailedDescription = serverErrorMessage.includes("permission-denied")
-        ? `FIRESTORE PERMISSION DENIED: ${serverErrorMessage}\n\n` +
-          `This means your Firestore rules are not allowing your account ('${currentUser?.email}') to delete products.\n\n` +
-          `TROUBLESHOOTING (for 'match /stickers/{stickerId}'):\n` +
-          `1. VERIFY YOUR ROLE: Ensure your user document ('users/${currentUser?.uid}') in Firestore has 'role: "admin"'.\n` +
-          `2. FIRESTORE RULE CHECK: The 'allow write' (which covers delete) for stickers is: 'allow write: if request.auth != null && exists(...) && get(...).data.role == "admin";'\n` +
-          `3. PUBLISH RULES & SIMULATOR: Confirm rules are PUBLISHED and test 'delete' on 'stickers/${stickerId}' with Firestore Rules Simulator for your admin UID.`
-        : serverErrorMessage;
-      toast({ title: "Error Deleting Product", description: detailedDescription, variant: "destructive", duration: 15000 });
-      console.error(`CLIENT: Failed to delete product ${stickerName}. Server response: ${serverErrorMessage}`);
+      let serverResponseMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}.`;
+      toast({ title: "Error Deleting Product", description: serverResponseMessage, variant: "destructive", duration: 10000 });
     }
     setIsSubmitting(false);
-    console.log("CLIENT: --- Product delete attempt finished ---");
   };
 
   if (isLoadingDB) {
@@ -256,15 +193,13 @@ export default function AdminInventoryPage() {
       <div className="space-y-6 py-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-headline text-primary">Inventory Management</h1>
-          <Button onClick={() => handleOpenForm(null)}>
+          <Button onClick={() => handleOpenForm(null)} disabled={currentUser?.uid === 'admin-static-id' || !isAdmin}>
             <PlusCircle className="mr-2 h-5 w-5" /> Add Product
           </Button>
         </div>
 
         <Dialog open={isFormOpen} onOpenChange={(open) => {
-            if (!open) {
-                setEditingSticker(null);
-            }
+            if (!open) { setEditingSticker(null); }
             setIsFormOpen(open);
         }}>
             <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -277,10 +212,7 @@ export default function AdminInventoryPage() {
                 <ProductForm
                     sticker={editingSticker}
                     onSave={handleSaveProduct}
-                    onCancel={() => {
-                        setIsFormOpen(false);
-                        setEditingSticker(null);
-                    }}
+                    onCancel={() => { setIsFormOpen(false); setEditingSticker(null); }}
                     isSubmitting={isSubmitting}
                 />
             </DialogContent>
@@ -307,7 +239,7 @@ export default function AdminInventoryPage() {
                   {searchTerm ? "Try a different search term." : "Add your first product to get started!"}
                 </p>
                  {!searchTerm && (
-                    <Button onClick={() => handleOpenForm(null)} className="mt-4">
+                    <Button onClick={() => handleOpenForm(null)} className="mt-4" disabled={currentUser?.uid === 'admin-static-id' || !isAdmin}>
                         <PlusCircle className="mr-2 h-5 w-5" /> Add Product
                     </Button>
                  )}
@@ -353,13 +285,13 @@ export default function AdminInventoryPage() {
                   </TableCell>
                   <TableCell className="font-body text-muted-foreground">{sticker.category || 'Uncategorized'}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" className="hover:text-primary" onClick={() => handleOpenForm(sticker)} disabled={currentUser?.uid === 'admin-static-id'}>
+                    <Button variant="ghost" size="icon" className="hover:text-primary" onClick={() => handleOpenForm(sticker)} disabled={currentUser?.uid === 'admin-static-id' || !isAdmin || isSubmitting}>
                       <Edit3 className="h-4 w-4" />
                       <span className="sr-only">Edit</span>
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="hover:text-destructive" disabled={isSubmitting || currentUser?.uid === 'admin-static-id'}>
+                        <Button variant="ghost" size="icon" className="hover:text-destructive" disabled={isSubmitting || currentUser?.uid === 'admin-static-id' || !isAdmin}>
                           <Trash2 className="h-4 w-4" />
                           <span className="sr-only">Delete</span>
                         </Button>
