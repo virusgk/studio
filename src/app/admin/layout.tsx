@@ -1,9 +1,10 @@
+
 'use client';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Package, Users, Settings, LogOut, StickerIcon } from 'lucide-react';
+import { LayoutDashboard, Package, Users as UsersIcon, Settings, LogOut, StickerIcon } from 'lucide-react'; // Renamed Users to UsersIcon
 import { useAuth } from '@/contexts/auth-context';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -13,8 +14,9 @@ import { AlertCircle } from 'lucide-react';
 const adminNavItems = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { name: 'Inventory', href: '/admin/inventory', icon: Package },
-  { name: 'Orders', href: '/admin/orders', icon: Users }, // Placeholder for orders
-  { name: 'Settings', href: '/admin/settings', icon: Settings }, // Placeholder
+  { name: 'Users', href: '/admin/users', icon: UsersIcon }, // Added Users
+  { name: 'Orders', href: '/admin/orders', icon: Package }, // Changed icon for Orders for variety
+  { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
@@ -64,7 +66,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                   href={item.href}
                   className={cn(
                     'flex items-center gap-3 rounded-lg px-3 py-2 text-foreground transition-all hover:bg-primary/10 hover:text-primary',
-                    pathname === item.href ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground'
+                    pathname === item.href || (item.name === "Inventory" && pathname.startsWith("/admin/inventory")) || (item.name === "Users" && pathname.startsWith("/admin/users")) ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground'
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -83,7 +85,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-72 flex-1"> {/* Ensure pl matches aside width */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-card px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
           {/* Mobile Nav Trigger could go here */}
-          <h1 className="text-xl font-semibold font-headline">{adminNavItems.find(item => pathname.startsWith(item.href))?.name || 'Admin'}</h1>
+          <h1 className="text-xl font-semibold font-headline">
+            {adminNavItems.find(item => pathname.startsWith(item.href))?.name || 
+             (pathname.startsWith('/admin/inventory') ? 'Inventory' : 
+             (pathname.startsWith('/admin/users') ? 'Users' : 'Admin'))
+            }
+          </h1>
         </header>
         <main className="flex-1 p-4 sm:px-6 sm:py-0 md:gap-8 bg-background rounded-lg shadow-inner overflow-auto">
           {children}

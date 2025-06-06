@@ -7,10 +7,11 @@ export interface User {
   displayName?: string | null;
   photoURL?: string | null;
   isAdmin?: boolean;
+  role?: 'admin' | 'user'; // Added role
 }
 
 export interface Address {
-  id?: string; 
+  id?: string;
   name: string;
   street: string;
   city: string;
@@ -28,8 +29,8 @@ export interface Sticker {
   price: number;
   category?: string;
   tags?: string[];
-  availableMaterials: string[]; 
-  stock?: number; 
+  availableMaterials: string[];
+  stock?: number;
 }
 
 export interface MaterialOption {
@@ -39,7 +40,7 @@ export interface MaterialOption {
 }
 
 export interface CartItemBase {
-  id: string; 
+  id: string;
   name: string;
   price: number;
   quantity: number;
@@ -48,12 +49,12 @@ export interface CartItemBase {
 export interface CartStickerItem extends CartItemBase {
   type: 'sticker';
   stickerId: string;
-  material?: string; 
+  material?: string;
 }
 
 export interface CartCustomItem extends CartItemBase {
   type: 'custom';
-  originalImageUrl: string; 
+  originalImageUrl: string;
   material: string;
 }
 
@@ -70,7 +71,7 @@ export interface Order {
   items: OrderItem[]; // Use OrderItem if defined, otherwise CartItem
   totalAmount: number;
   shippingAddress: Address;
-  orderDate: string; 
+  orderDate: string;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 }
 
@@ -79,4 +80,15 @@ export interface ImageResolutionResult {
   width: number;
   height: number;
   message: string;
+}
+
+// For the new user management feature
+export interface UserDocument {
+    uid: string;
+    email: string | null;
+    displayName: string | null;
+    photoURL: string | null;
+    role: 'admin' | 'user';
+    createdAt?: any; // Firestore Timestamp
+    lastLogin?: any; // Firestore Timestamp
 }
