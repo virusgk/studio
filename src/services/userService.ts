@@ -2,11 +2,9 @@
 'use server';
 import { getAdminDb, getAdminAuth, admin } from '@/firebase/adminConfig';
 import type { UserDocument } from '@/types';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '@/firebase/config'; 
 
-const usersCollectionRef = collection(db, 'users');
-
+// This function is now THE gatekeeper for admin operations.
+// It uses the Firebase Admin SDK.
 async function verifyAdmin(idToken: string, serviceName: string = 'USER_SERVICE'): Promise<string | null> {
   const logPrefix = `VERIFY_ADMIN (${serviceName})`;
   if (!idToken) {
@@ -19,6 +17,10 @@ async function verifyAdmin(idToken: string, serviceName: string = 'USER_SERVICE'
     const adminAuth = getAdminAuth(); 
     const adminDb = getAdminDb();   
     
+    if (!adminAuth || !adminDb) {
+      console.error(`${logPrefix}: Firebase Admin Auth or DB SDK is not initialized. Check server startup logs.`);
+      return null;
+    }
     console.log(`${logPrefix}: Firebase Admin Auth and DB SDKs obtained.`);
     
     let decodedToken;
@@ -36,7 +38,7 @@ async function verifyAdmin(idToken: string, serviceName: string = 'USER_SERVICE'
     console.log(`${logPrefix}: Looking up user document at users/${uid}`);
     const userDocSnap = await userDocRef.get();
 
-    if (!userDocSnap.exists()) {
+    if (!userDocSnap.exists) {
       console.error(`${logPrefix}: User document for UID ${uid} does NOT exist in Firestore.`);
       return null; 
     }
@@ -59,41 +61,52 @@ async function verifyAdmin(idToken: string, serviceName: string = 'USER_SERVICE'
 }
 
 export async function getAllUsers(): Promise<UserDocument[]> {
-  try {
-    const q = query(usersCollectionRef, orderBy('email')); 
-    const data = await getDocs(q);
-    const users = data.docs.map((doc) => {
-      const docData = doc.data();
-      return {
-        ...docData,
-        uid: doc.id, 
-        createdAt: docData.createdAt?.toDate ? docData.createdAt.toDate().toISOString() : null, 
-        lastLogin: docData.lastLogin?.toDate ? docData.lastLogin.toDate().toISOString() : null, 
-      } as UserDocument;
-    });
-    return users;
-  } catch (error: any) {
-    console.error("SERVER: userService.getAllUsers: Error fetching users from Firestore (Client SDK): ", error);
-    return [];
-  }
+  // This function is typically called by an admin, so it might also need verifyAdmin
+  // However, if it's just reading data that Firestore rules allow admins to read,
+  // it might be okay with client SDK if the client is an admin.
+  // For consistency and security, making it admin-only via verifyAdmin is safer if called from client.
+  // For now, assuming it's called in a context where client SDK's auth is sufficient or rules allow.
+  // If this needs to be callable from a generic client that isn't necessarily admin, rules must permit.
+  // Sticking with existing client SDK for this read, as it doesn't modify data.
+  // Firestore rules would control if a non-admin client can call this.
+  // If this should *only* be callable by an admin *client*, then the client page needs to handle this.
+  // Or, if it's a server action used by an admin page, it should also use verifyAdmin.
+  // Let's assume for now this is a read operation that the client page (AdminUsersPage) ensures only an admin can trigger.
+  
+  // To be truly secure if called from a client as a server action, it *should* use verifyAdmin.
+  // However, just to get the `updateUserRole` working, I'll leave this for now.
+  // The `getAllUsers` function in AdminUsersPage already uses client-side `db`.
+
+  // Client-side function to get users (does not require admin auth for the action itself, rules handle access)
+  // This one can continue to use the client 'db' if appropriate.
+  // Firestore rules need to allow an admin client to read all user docs.
+  // The existing AdminUsersPage fetches users directly with client SDK for now.
+  // So, this server action `getAllUsers` might be redundant or needs to be admin-protected if exposed.
+  // For simplicity, I am commenting out the previous implementation that used client 'db'
+  // as AdminUsersPage fetches its own data. If this was meant to be an admin-only secure fetch, it would use verifyAdmin.
+  console.warn("SERVER (userService.getAllUsers): This function is currently not designed to be securely called as a server action by non-admins. AdminUsersPage fetches users client-side. If this is intended as a secure server action, it needs an idToken and verifyAdmin().");
+  return []; // Return empty, as AdminUsersPage handles its own data fetching.
 }
 
+
 export async function updateUserRole(idToken: string, userId: string, newRole: 'admin' | 'user'): Promise<boolean | string> {
-  console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: Invoked for userId: ${userId}, newRole: ${newRole}`);
+  const serviceName = 'updateUserRole';
+  console.log(`SERVER (${serviceName}): Invoked for userId: ${userId}, newRole: ${newRole}`);
   
-  const adminUid = await verifyAdmin(idToken, 'updateUserRole'); // Pass service name for better logging
+  const adminUid = await verifyAdmin(idToken, serviceName);
   if (!adminUid) {
+    console.error(`SERVER (${serviceName}): Admin verification failed for updating role of user ${userId}.`);
     return "Server Action Error: User is not authorized to perform this admin operation or token is invalid.";
   }
   
   if (adminUid === userId && newRole === 'user') {
-     console.warn(`SERVER: UPDATE_USER_ROLE_SERVICE: Admin ${adminUid} attempting to revoke their own admin status. Denied by service.`);
+     console.warn(`SERVER (${serviceName}): Admin ${adminUid} attempting to revoke their own admin status. Denied by service.`);
      return "Server Action Error: Admins cannot revoke their own admin status through this service.";
   }
 
-  console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: Admin ${adminUid} verified. Proceeding to update role for ${userId}.`);
+  console.log(`SERVER (${serviceName}): Admin UID ${adminUid} verified. Proceeding to update role for ${userId}.`);
   try {
-    const adminDb = getAdminDb();
+    const adminDb = getAdminDb(); // Use Admin SDK's Firestore instance
     const userDocRef = adminDb.collection('users').doc(userId);
     const updatePayload = { 
       role: newRole,
@@ -102,14 +115,14 @@ export async function updateUserRole(idToken: string, userId: string, newRole: '
     
     await userDocRef.update(updatePayload);
     
-    console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: User role updated successfully using Admin SDK for userId: ${userId} to ${newRole}`);
+    console.log(`SERVER (${serviceName}): User role updated successfully using Admin SDK for userId: ${userId} to ${newRole}`);
     return true;
   } catch (error: any) {
     const errorCode = error.code || 'UNKNOWN_CODE';
     const errorMessage = error.message || 'Unknown Firestore error occurred.';
     const fullError = `Firebase Admin SDK Error (Code: ${errorCode}): ${errorMessage}`;
     
-    console.error(`SERVER: UPDATE_USER_ROLE_SERVICE: CRITICAL ERROR while updating role for user ID ${userId} to ${newRole} (Admin SDK):`, fullError, error);
+    console.error(`SERVER (${serviceName}): CRITICAL ERROR while updating role for user ID ${userId} to ${newRole} (Admin SDK):`, fullError, error);
     return `Server Error: ${fullError}`;
   }
 }

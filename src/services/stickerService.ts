@@ -2,30 +2,9 @@
 'use server';
 import { getAdminDb, getAdminAuth, admin } from '@/firebase/adminConfig';
 import type { Sticker } from '@/types';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '@/firebase/config'; 
 
-const stickersCollectionRef = collection(db, 'stickers');
-
-
-export async function getStickersFromDB(): Promise<Sticker[]> {
-  try {
-    const q = query(stickersCollectionRef, orderBy('name'));
-    const data = await getDocs(q);
-    const stickers = data.docs.map((doc) => {
-      const docData = doc.data();
-      return {
-        ...docData,
-        id: doc.id,
-      } as Sticker;
-    });
-    return stickers;
-  } catch (error) {
-    console.error("SERVER: GET_STICKERS_FROM_DB: Error fetching stickers from Firestore: ", error);
-    return [];
-  }
-}
-
+// This function is now THE gatekeeper for admin operations.
+// It uses the Firebase Admin SDK.
 async function verifyAdmin(idToken: string, serviceName: string = 'STICKER_SERVICE'): Promise<string | null> {
   const logPrefix = `VERIFY_ADMIN (${serviceName})`;
   if (!idToken) {
@@ -38,6 +17,10 @@ async function verifyAdmin(idToken: string, serviceName: string = 'STICKER_SERVI
     const adminAuth = getAdminAuth(); 
     const adminDb = getAdminDb();   
     
+    if (!adminAuth || !adminDb) {
+      console.error(`${logPrefix}: Firebase Admin Auth or DB SDK is not initialized. Check server startup logs.`);
+      return null;
+    }
     console.log(`${logPrefix}: Firebase Admin Auth and DB SDKs obtained.`);
     
     let decodedToken;
@@ -55,7 +38,7 @@ async function verifyAdmin(idToken: string, serviceName: string = 'STICKER_SERVI
     console.log(`${logPrefix}: Looking up user document at users/${uid}`);
     const userDocSnap = await userDocRef.get();
 
-    if (!userDocSnap.exists()) {
+    if (!userDocSnap.exists) {
       console.error(`${logPrefix}: User document for UID ${uid} does NOT exist in Firestore.`);
       return null; 
     }
@@ -79,16 +62,18 @@ async function verifyAdmin(idToken: string, serviceName: string = 'STICKER_SERVI
 
 
 export async function addStickerToDB(idToken: string, stickerData: Omit<Sticker, 'id'>): Promise<string | null> {
-  console.log("SERVER: ADD_STICKER_TO_DB: Service function invoked.");
+  const serviceName = 'addStickerToDB';
+  console.log(`SERVER (${serviceName}): Service function invoked.`);
   
-  const adminUid = await verifyAdmin(idToken, 'addStickerToDB');
+  const adminUid = await verifyAdmin(idToken, serviceName);
   if (!adminUid) {
+    console.error(`SERVER (${serviceName}): Admin verification failed.`);
     return "Server Action Error: User is not authorized to perform this admin operation or token is invalid.";
   }
 
-  console.log("SERVER: ADD_STICKER_TO_DB: Admin verified. Received sticker data for add:", JSON.stringify(stickerData, null, 2));
+  console.log(`SERVER (${serviceName}): Admin UID ${adminUid} verified. Received sticker data for add:`, JSON.stringify(stickerData, null, 2));
   try {
-    const adminDb = getAdminDb();
+    const adminDb = getAdminDb(); // Use Admin SDK's Firestore instance
     const adminStickersCollectionRef = adminDb.collection('stickers');
     const dataWithTimestamps = {
       ...stickerData,
@@ -96,65 +81,95 @@ export async function addStickerToDB(idToken: string, stickerData: Omit<Sticker,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
     const docRef = await adminStickersCollectionRef.add(dataWithTimestamps);
-    console.log("SERVER: ADD_STICKER_TO_DB: Sticker added successfully using Admin SDK. Document ID:", docRef.id);
+    console.log(`SERVER (${serviceName}): Sticker added successfully using Admin SDK. Document ID:`, docRef.id);
     return docRef.id;
   } catch (error: any) {
     const errorCode = error.code || 'UNKNOWN_CODE';
     const errorMessage = error.message || 'Unknown Firestore error occurred.';
     const fullError = `Firebase Admin SDK Error (Code: ${errorCode}): ${errorMessage}`;
-    console.error("SERVER: ADD_STICKER_TO_DB: CRITICAL ERROR WHILE ADDING STICKER (Admin SDK):", fullError, error);
+    console.error(`SERVER (${serviceName}): CRITICAL ERROR WHILE ADDING STICKER (Admin SDK):`, fullError, error);
     return `Server Error: ${fullError}`; 
   }
 }
 
 export async function updateStickerInDB(idToken: string, stickerId: string, stickerData: Partial<Omit<Sticker, 'id'>>): Promise<boolean | string> {
-  console.log(`SERVER: UPDATE_STICKER_IN_DB: Service function invoked for ID: ${stickerId}.`);
+  const serviceName = 'updateStickerInDB';
+  console.log(`SERVER (${serviceName}): Service function invoked for ID: ${stickerId}.`);
 
-  const adminUid = await verifyAdmin(idToken, 'updateStickerInDB');
+  const adminUid = await verifyAdmin(idToken, serviceName);
   if (!adminUid) {
+    console.error(`SERVER (${serviceName}): Admin verification failed for sticker ID ${stickerId}.`);
     return "Server Action Error: User is not authorized to perform this admin operation or token is invalid.";
   }
 
-  console.log("SERVER: UPDATE_STICKER_IN_DB: Admin verified. Received sticker data for update:", JSON.stringify(stickerData, null, 2));
+  console.log(`SERVER (${serviceName}): Admin UID ${adminUid} verified. Received sticker data for update:`, JSON.stringify(stickerData, null, 2));
   try {
-    const adminDb = getAdminDb();
+    const adminDb = getAdminDb(); // Use Admin SDK's Firestore instance
     const stickerDocRef = adminDb.collection('stickers').doc(stickerId);
     const dataWithTimestamps = {
       ...stickerData,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(), 
     };
     await stickerDocRef.update(dataWithTimestamps);
-    console.log("SERVER: UPDATE_STICKER_IN_DB: Sticker updated successfully using Admin SDK for ID:", stickerId);
+    console.log(`SERVER (${serviceName}): Sticker updated successfully using Admin SDK for ID:`, stickerId);
     return true;
   } catch (error: any) {
     const errorCode = error.code || 'UNKNOWN_CODE';
     const errorMessage = error.message || 'Unknown Firestore error occurred.';
     const fullError = `Firebase Admin SDK Error (Code: ${errorCode}): ${errorMessage}`;
-    console.error(`SERVER: UPDATE_STICKER_IN_DB: CRITICAL ERROR WHILE UPDATING STICKER ID ${stickerId} (Admin SDK):`, fullError, error);
+    console.error(`SERVER (${serviceName}): CRITICAL ERROR WHILE UPDATING STICKER ID ${stickerId} (Admin SDK):`, fullError, error);
     return `Server Error: ${fullError}`; 
   }
 }
 
 export async function deleteStickerFromDB(idToken: string, stickerId: string): Promise<boolean | string> {
-  console.log(`SERVER: DELETE_STICKER_FROM_DB: Service function invoked for ID: ${stickerId}.`);
+  const serviceName = 'deleteStickerFromDB';
+  console.log(`SERVER (${serviceName}): Service function invoked for ID: ${stickerId}.`);
 
-  const adminUid = await verifyAdmin(idToken, 'deleteStickerFromDB');
+  const adminUid = await verifyAdmin(idToken, serviceName);
   if (!adminUid) {
+    console.error(`SERVER (${serviceName}): Admin verification failed for deleting sticker ID ${stickerId}.`);
     return "Server Action Error: User is not authorized to perform this admin operation or token is invalid.";
   }
   
-  console.log("SERVER: DELETE_STICKER_FROM_DB: Admin verified. Attempting to delete document with ID:", stickerId);
+  console.log(`SERVER (${serviceName}): Admin UID ${adminUid} verified. Attempting to delete document with ID:`, stickerId);
   try {
-    const adminDb = getAdminDb();
+    const adminDb = getAdminDb(); // Use Admin SDK's Firestore instance
     const stickerDocRef = adminDb.collection('stickers').doc(stickerId);
     await stickerDocRef.delete();
-    console.log("SERVER: DELETE_STICKER_FROM_DB: Sticker deleted successfully using Admin SDK for ID:", stickerId);
+    console.log(`SERVER (${serviceName}): Sticker deleted successfully using Admin SDK for ID:`, stickerId);
     return true;
   } catch (error: any) {
     const errorCode = error.code || 'UNKNOWN_CODE';
     const errorMessage = error.message || 'Unknown Firestore error occurred.';
     const fullError = `Firebase Admin SDK Error (Code: ${errorCode}): ${errorMessage}`;
-    console.error(`SERVER: DELETE_STICKER_FROM_DB: CRITICAL ERROR WHILE DELETING STICKER ID ${stickerId} (Admin SDK):`, fullError, error);
+    console.error(`SERVER (${serviceName}): CRITICAL ERROR WHILE DELETING STICKER ID ${stickerId} (Admin SDK):`, fullError, error);
     return `Server Error: ${fullError}`; 
+  }
+}
+
+// Client-side function to get stickers (does not require admin auth)
+// This one can continue to use the client 'db' if appropriate, or be moved if all sticker access should be server-side.
+// For now, assuming it's client-callable and uses client SDK:
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '@/firebase/config'; 
+
+const stickersCollectionRef = collection(db, 'stickers');
+
+export async function getStickersFromDB(): Promise<Sticker[]> {
+  try {
+    const q = query(stickersCollectionRef, orderBy('name'));
+    const data = await getDocs(q);
+    const stickers = data.docs.map((doc) => {
+      const docData = doc.data();
+      return {
+        ...docData,
+        id: doc.id,
+      } as Sticker;
+    });
+    return stickers;
+  } catch (error) {
+    console.error("SERVER: GET_STICKERS_FROM_DB: Error fetching stickers from Firestore (Client SDK used by this func): ", error);
+    return [];
   }
 }
