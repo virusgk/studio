@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           photoURL: firebaseUser.photoURL,
           isAdmin: isUserAdmin, 
         };
-        console.log("AUTH_CONTEXT: User object created/updated:", { uid: user.uid, email: user.email, isAdmin: user.isAdmin });
+        console.log("AUTH_CONTEXT: User object created/updated by onAuthStateChanged:", { uid: user.uid, email: user.email, isAdmin: user.isAdmin });
         setCurrentUser(user);
         setIsAdmin(isUserAdmin);
         if (user.uid !== 'admin-static-id') { 
@@ -55,12 +55,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } else {
         if (currentUser?.uid !== 'admin-static-id') {
-            console.log("AUTH_CONTEXT: No Firebase user, clearing non-static user state.");
+            console.log("AUTH_CONTEXT: No Firebase user (onAuthStateChanged), clearing non-static user state.");
             setCurrentUser(null);
             setIsAdmin(false);
             setUserAddress(null);
         } else {
-            console.log("AUTH_CONTEXT: No Firebase user, but current user is static admin. State retained.");
+            console.log("AUTH_CONTEXT: No Firebase user (onAuthStateChanged), but current user is static admin. State retained.");
         }
       }
       console.log("AUTH_CONTEXT: Setting loading to false after onAuthStateChanged.");
@@ -70,17 +70,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     console.log("AUTH_CONTEXT: Attempting to get redirect result...");
     getRedirectResult(auth)
       .then((result) => {
-        if (result) {
-          console.log("AUTH_CONTEXT: Google Sign-In via redirect successful. User from result:", result.user?.displayName, "UID:", result.user?.uid);
-          // onAuthStateChanged will handle setting the user state and isAdmin status.
-          const redirectPath = sessionStorage.getItem('firebaseRedirectPathAfterLogin');
-          if (redirectPath) {
-            console.log("AUTH_CONTEXT: Found redirectPathAfterLogin in session storage:", redirectPath);
-            sessionStorage.removeItem('firebaseRedirectPathAfterLogin');
-            // router.push(redirectPath); // Navigating here can sometimes be premature or cause loops.
-                                        // Let onAuthStateChanged and conditional rendering handle UI updates.
-          } else {
-            console.log("AUTH_CONTEXT: No redirectPathAfterLogin found in session storage.");
+        if (result && result.user) {
+          const loggedInUser = result.user;
+          console.log("AUTH_CONTEXT: Google Sign-In via redirect successful. User from result:", loggedInUser?.displayName, "UID:", loggedInUser?.uid);
+          const isUserAdminResult = loggedInUser.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+          
+          // Temporarily set user state for faster UI update and redirect decision
+          // onAuthStateChanged will provide the definitive update shortly after.
+          const userForState: User = {
+            uid: loggedInUser.uid,
+            email: loggedInUser.email,
+            displayName: loggedInUser.displayName,
+            photoURL: loggedInUser.photoURL,
+            isAdmin: isUserAdminResult,
+          };
+          setCurrentUser(userForState); // Optimistic update
+          setIsAdmin(isUserAdminResult); // Optimistic update
+          if (userForState.uid !== 'admin-static-id') {
+            fetchAddressInternal(loggedInUser.uid); // Fetch address optimistically
+          }
+
+          const redirectPathFromStorage = sessionStorage.getItem('firebaseRedirectPathAfterLogin');
+          sessionStorage.removeItem('firebaseRedirectPathAfterLogin');
+          console.log("AUTH_CONTEXT: Retrieved and removed redirectPathAfterLogin:", redirectPathFromStorage);
+
+          if (isUserAdminResult) {
+            if (redirectPathFromStorage && redirectPathFromStorage.startsWith('/admin/') && redirectPathFromStorage !== '/login') {
+              console.log("AUTH_CONTEXT: Admin signed in (redirect result). Redirecting to stored admin path:", redirectPathFromStorage);
+              router.push(redirectPathFromStorage);
+            } else {
+              console.log("AUTH_CONTEXT: Admin signed in (redirect result). Redirecting to /admin/dashboard.");
+              router.push('/admin/dashboard');
+            }
+          } else { // Regular user
+            if (redirectPathFromStorage && redirectPathFromStorage !== '/login' && !redirectPathFromStorage.startsWith('/admin/')) {
+              console.log("AUTH_CONTEXT: User signed in (redirect result). Redirecting to stored path:", redirectPathFromStorage);
+              router.push(redirectPathFromStorage);
+            } else {
+              console.log("AUTH_CONTEXT: User signed in (redirect result). Redirecting to /profile.");
+              router.push('/profile'); 
+            }
           }
         } else {
           console.log("AUTH_CONTEXT: No redirect result found (this is normal if not a redirect sign-in).");
@@ -88,13 +117,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       })
       .catch((error) => {
         console.error("AUTH_CONTEXT: Error processing Google Sign-In redirect result:", error.code, error.message, error);
-        // Potentially set loading to false here if this is the only path to set it
-        // But onAuthStateChanged should typically handle this.
       })
       .finally(() => {
         console.log("AUTH_CONTEXT: Finished checking for redirect result.");
-        // If onAuthStateChanged hasn't fired yet and there's no redirect result,
-        // loading might still be true. It's safer to ensure onAuthStateChanged always sets loading to false.
+        // Loading state is primarily managed by onAuthStateChanged
       });
 
 
@@ -103,10 +129,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       unsubscribe();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Running this effect once on mount is usually correct for redirect handling.
-          // router removed from deps, currentUser?.uid removed as well to simplify.
-
-  
+  }, []); 
+          
   const fetchAddressInternal = async (uid: string) => {
     if (!uid || uid === 'admin-static-id') {
       console.log("AUTH_CONTEXT: Skipping address fetch for static admin or no UID.");
@@ -138,19 +162,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     try {
       console.log("AUTH_CONTEXT: Attempting Google Sign-In with redirect...");
       setLoading(true);
       const currentPath = window.location.pathname + window.location.search;
-      console.log("AUTH_CONTEXT: Storing current path for redirect:", currentPath);
-      sessionStorage.setItem('firebaseRedirectPathAfterLogin', currentPath);
+      // Only store a meaningful redirect path. Avoid storing '/login' itself unless it has a redirect param.
+      if (currentPath !== '/login' || window.location.search.includes('redirect=')) {
+        console.log("AUTH_CONTEXT: Storing current path for redirect:", currentPath);
+        sessionStorage.setItem('firebaseRedirectPathAfterLogin', currentPath);
+      } else {
+         console.log("AUTH_CONTEXT: On login page without specific redirect query, not storing path. Will default after login.");
+         sessionStorage.removeItem('firebaseRedirectPathAfterLogin'); 
+      }
       await signInWithRedirect(auth, provider);
-      // Page will redirect to Google. Result handled by getRedirectResult on return.
     } catch (error: any) {
       console.error("AUTH_CONTEXT: Google Sign-In with redirect initiation error:", error.code, error.message, error);
+      if (error.code === 'auth/popup-blocked') {
+        alert("Popup blocked. Please allow popups for this site and try again. If the issue persists, your browser environment might be too restrictive for this sign-in method.");
+      }
       setLoading(false); 
     }
   };
@@ -169,7 +200,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       };
       setCurrentUser(adminUser);
       setIsAdmin(true);
-      setUserAddress(null);
+      setUserAddress(null); // Static admin has no address
       console.log("AUTH_CONTEXT: Static admin login successful.");
       setLoading(false);
       router.push('/admin/dashboard');
@@ -184,23 +215,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log("AUTH_CONTEXT: Logout initiated for user:", currentUser?.uid);
       setLoading(true);
-      if (currentUser?.uid === 'admin-static-id') {
+      const isStaticAdminLogout = currentUser?.uid === 'admin-static-id';
+      
+      // Clear local user state immediately for responsiveness
+      setCurrentUser(null);
+      setIsAdmin(false);
+      setUserAddress(null);
+
+      if (isStaticAdminLogout) {
         console.log("AUTH_CONTEXT: Logging out static admin.");
-        setCurrentUser(null);
-        setIsAdmin(false);
-        setUserAddress(null);
+        // No Firebase sign-out needed, local state already cleared.
       } else {
         console.log("AUTH_CONTEXT: Signing out Firebase user.");
         await firebaseSignOut(auth);
-        // onAuthStateChanged will handle clearing user, isAdmin, userAddress.
+        // onAuthStateChanged will confirm final state, but local clear helps UI.
       }
       router.push('/login');
     } catch (error) {
       console.error("AUTH_CONTEXT: Logout Error:", error);
     } finally {
-        // setLoading(false); // onAuthStateChanged will set loading to false.
-                           // Setting it here might be redundant or cause a quick true/false flicker.
-        console.log("AUTH_CONTEXT: Logout process finished on client.");
+      // setLoading(false) // Let onAuthStateChanged handle this after firebaseSignOut.
+      console.log("AUTH_CONTEXT: Logout process finished on client.");
     }
   };
 
@@ -236,4 +271,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-
