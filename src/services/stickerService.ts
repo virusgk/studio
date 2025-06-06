@@ -5,6 +5,8 @@ import type { Sticker } from '@/types';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, orderBy, Timestamp } from 'firebase/firestore';
 
 const stickersCollectionRef = collection(db, 'stickers');
+const UNAUTHENTICATED_SERVER_ACTION_ERROR = "Server Action Error: User is not authenticated in the server context. Admin operations require server-side authentication.";
+
 
 export async function getStickersFromDB(): Promise<Sticker[]> {
   try {
@@ -31,11 +33,16 @@ export async function addStickerToDB(stickerData: Omit<Sticker, 'id'>): Promise<
   
   const serverAuthUser = auth.currentUser;
   console.log(`SERVER: ADD_STICKER_TO_DB: Firebase auth.currentUser?.uid on server: ${serverAuthUser?.uid || 'N/A (not authenticated or no user)'}`);
-  if (!serverAuthUser || !serverAuthUser.uid) {
-      console.error("SERVER: ADD_STICKER_TO_DB: CRITICAL - No authenticated user in server action context. Firestore 'add' will likely fail if rules require admin auth.");
-  } else {
-      console.log(`SERVER: ADD_STICKER_TO_DB: Authenticated user in server action context: ${serverAuthUser.uid}. Firestore 'add' will proceed under this user's identity.`);
+  if (!serverAuthUser) {
+      console.error("SERVER: ADD_STICKER_TO_DB: " + UNAUTHENTICATED_SERVER_ACTION_ERROR);
+      return UNAUTHENTICATED_SERVER_ACTION_ERROR;
   }
+  if (!serverAuthUser.uid) { // Should be redundant if !serverAuthUser is caught, but good practice
+      console.error("SERVER: ADD_STICKER_TO_DB: CRITICAL - Authenticated user object present, but UID is missing.");
+      return "Server Action Error: Authenticated user object is invalid (missing UID).";
+  }
+  console.log(`SERVER: ADD_STICKER_TO_DB: Authenticated user in server action context: ${serverAuthUser.uid}. Firestore 'add' will proceed under this user's identity.`);
+
 
   console.log("SERVER: ADD_STICKER_TO_DB: Received sticker data for add:", JSON.stringify(stickerData, null, 2));
   try {
@@ -73,11 +80,16 @@ export async function updateStickerInDB(stickerId: string, stickerData: Partial<
 
   const serverAuthUser = auth.currentUser;
   console.log(`SERVER: UPDATE_STICKER_IN_DB: Firebase auth.currentUser?.uid on server: ${serverAuthUser?.uid || 'N/A (not authenticated or no user)'}`);
-   if (!serverAuthUser || !serverAuthUser.uid) {
-      console.error("SERVER: UPDATE_STICKER_IN_DB: CRITICAL - No authenticated user in server action context. Firestore 'update' will likely fail if rules require admin auth.");
-  } else {
-      console.log(`SERVER: UPDATE_STICKER_IN_DB: Authenticated user in server action context: ${serverAuthUser.uid}. Firestore 'update' will proceed under this user's identity.`);
+   if (!serverAuthUser) {
+      console.error("SERVER: UPDATE_STICKER_IN_DB: " + UNAUTHENTICATED_SERVER_ACTION_ERROR);
+      return UNAUTHENTICATED_SERVER_ACTION_ERROR;
   }
+   if (!serverAuthUser.uid) {
+      console.error("SERVER: UPDATE_STICKER_IN_DB: CRITICAL - Authenticated user object present, but UID is missing.");
+      return "Server Action Error: Authenticated user object is invalid (missing UID).";
+  }
+  console.log(`SERVER: UPDATE_STICKER_IN_DB: Authenticated user in server action context: ${serverAuthUser.uid}. Firestore 'update' will proceed under this user's identity.`);
+
 
   console.log("SERVER: UPDATE_STICKER_IN_DB: Received sticker data for update:", JSON.stringify(stickerData, null, 2));
   try {
@@ -116,11 +128,15 @@ export async function deleteStickerFromDB(stickerId: string): Promise<boolean | 
 
   const serverAuthUser = auth.currentUser;
   console.log(`SERVER: DELETE_STICKER_FROM_DB: Firebase auth.currentUser?.uid on server: ${serverAuthUser?.uid || 'N/A (not authenticated or no user)'}`);
-   if (!serverAuthUser || !serverAuthUser.uid) {
-      console.error("SERVER: DELETE_STICKER_FROM_DB: CRITICAL - No authenticated user in server action context. Firestore 'delete' will likely fail if rules require admin auth.");
-  } else {
-      console.log(`SERVER: DELETE_STICKER_FROM_DB: Authenticated user in server action context: ${serverAuthUser.uid}. Firestore 'delete' will proceed under this user's identity.`);
+   if (!serverAuthUser) {
+      console.error("SERVER: DELETE_STICKER_FROM_DB: " + UNAUTHENTICATED_SERVER_ACTION_ERROR);
+      return UNAUTHENTICATED_SERVER_ACTION_ERROR;
   }
+   if (!serverAuthUser.uid) {
+      console.error("SERVER: DELETE_STICKER_FROM_DB: CRITICAL - Authenticated user object present, but UID is missing.");
+      return "Server Action Error: Authenticated user object is invalid (missing UID).";
+  }
+  console.log(`SERVER: DELETE_STICKER_FROM_DB: Authenticated user in server action context: ${serverAuthUser.uid}. Firestore 'delete' will proceed under this user's identity.`);
 
   try {
     const stickerDoc = doc(db, 'stickers', stickerId);
@@ -149,3 +165,4 @@ export async function deleteStickerFromDB(stickerId: string): Promise<boolean | 
     return `Server Error: ${fullError}`; 
   }
 }
+
