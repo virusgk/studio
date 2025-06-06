@@ -76,8 +76,9 @@ export default function AdminInventoryPage() {
   ) => {
     setIsSubmitting(true);
     console.log("CLIENT: --- Attempting to save product ---");
-    console.log("CLIENT: Current user from useAuth:", currentUser);
-    console.log("CLIENT: Is Admin (from useAuth):", isAdmin);
+    console.log("CLIENT: Current user from useAuth (at save point):", JSON.stringify(currentUser, null, 2));
+    console.log("CLIENT: Current user email from useAuth (at save point):", currentUser?.email);
+    console.log("CLIENT: Is Admin (from useAuth, at save point):", isAdmin);
     console.log("CLIENT: Raw form data received:", formData);
     console.log("CLIENT: Image files selected:", imageFiles.map(f => f.name));
     console.log("CLIENT: Video files selected:", videoFiles.map(f => f.name));
@@ -141,7 +142,7 @@ export default function AdminInventoryPage() {
         } else {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to update product. Ensure admin authentication.";
           const detailedDescription = serverErrorMessage.includes("permission-denied")
-            ? `${serverErrorMessage} Please double-check your Firestore Security Rules and ensure the admin email '${currentUser?.email}' matches the email specified in the rules for write access to the 'stickers' collection.`
+            ? `${serverErrorMessage} Please ensure your admin email ('${currentUser?.email}') matches the one in Firestore Security Rules and that the rules allow updates.`
             : serverErrorMessage;
           toast({ title: "Error Updating Product", description: detailedDescription, variant: "destructive", duration: 9000 });
           console.error(`CLIENT: Failed to update product ${formData.name}. Server response: ${serverErrorMessage}`);
@@ -155,8 +156,8 @@ export default function AdminInventoryPage() {
           console.log(`CLIENT: Product ${formData.name} added successfully with ID: ${result}.`);
         } else {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to add product. Ensure admin authentication.";
-          const detailedDescription = serverErrorMessage.includes("permission-denied")
-            ? `${serverErrorMessage} Please double-check your Firestore Security Rules and ensure the admin email '${currentUser?.email}' matches the email specified in the rules for write access to the 'stickers' collection.`
+           const detailedDescription = serverErrorMessage.includes("permission-denied")
+            ? `${serverErrorMessage} Ensure your admin email ('${currentUser?.email}') EXACTLY matches the one in your Firestore Security Rules for write access to the 'stickers' collection. Also verify the rules themselves are correct.`
             : serverErrorMessage;
           toast({ title: "Error Adding Product", description: detailedDescription, variant: "destructive", duration: 9000 });
           console.error(`CLIENT: Failed to add product ${formData.name}. Server response: ${serverErrorMessage}`);
@@ -183,6 +184,10 @@ export default function AdminInventoryPage() {
   const handleDeleteProduct = async (stickerId: string, stickerName: string) => {
     setIsSubmitting(true);
     console.log(`CLIENT: --- Attempting to delete product ID: ${stickerId}, Name: ${stickerName} ---`);
+    console.log("CLIENT: Current user from useAuth (at delete point):", JSON.stringify(currentUser, null, 2));
+    console.log("CLIENT: Current user email from useAuth (at delete point):", currentUser?.email);
+    console.log("CLIENT: Is Admin (from useAuth, at delete point):", isAdmin);
+
     if (currentUser?.uid === 'admin-static-id') {
         const errorMsg = "Static admin account cannot delete from the database. Please use Google Sign-In.";
         console.error("CLIENT: " + errorMsg);

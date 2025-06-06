@@ -32,15 +32,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userAddress, setUserAddress] = useState<Address | null>(null);
   const router = useRouter();
-  const searchParams = useSearchParams(); // Get search params
+  const searchParams = useSearchParams(); 
 
   useEffect(() => {
     console.log("AUTH_CONTEXT: Initializing AuthProvider effect. Current user UID (before onAuthStateChanged):", currentUser?.uid);
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       console.log("AUTH_CONTEXT: onAuthStateChanged triggered. Firebase user UID:", firebaseUser?.uid || 'null');
       if (firebaseUser) {
-        const isUserAdmin = firebaseUser.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        const userEmailTrimmedLower = firebaseUser.email?.trim().toLowerCase();
+        const adminEmailTrimmedLower = ADMIN_EMAIL.toLowerCase();
+        const isUserAdmin = userEmailTrimmedLower === adminEmailTrimmedLower;
         
+        console.log("AUTH_CONTEXT: Firebase User Email (raw):", firebaseUser.email);
+        console.log("AUTH_CONTEXT: Firebase User Email (trimmed, lowercased):", userEmailTrimmedLower);
+        console.log("AUTH_CONTEXT: Configured ADMIN_EMAIL (trimmed, lowercased from env/default):", adminEmailTrimmedLower);
+        console.log("AUTH_CONTEXT: Calculated isUserAdmin based on email match:", isUserAdmin);
+
         const user: User = {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
@@ -115,7 +122,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const loggedInUser = result.user;
       console.log("AUTH_CONTEXT: Google Sign-In via popup successful. User:", loggedInUser?.displayName, "UID:", loggedInUser?.uid);
       
-      // onAuthStateChanged will handle setting user state, but we can redirect here
       const isUserAdminResult = loggedInUser.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
       
       const redirectParam = searchParams.get('redirect');
@@ -135,11 +141,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
         console.log("AUTH_CONTEXT: Google Sign-In popup cancelled or closed by user.");
       } else {
-        // Handle other errors
         alert(`Sign-in error: ${error.message}`);
       }
     } finally {
-      // setLoading(false); // Let onAuthStateChanged handle the final loading state
       console.log("AUTH_CONTEXT: Finished signInWithGoogle attempt.");
     }
   };
@@ -189,7 +193,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("AUTH_CONTEXT: Logout Error:", error);
     } finally {
-      // setLoading(false); // onAuthStateChanged handles this
       console.log("AUTH_CONTEXT: Logout process finished on client.");
     }
   };
