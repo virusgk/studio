@@ -165,21 +165,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     } catch (error: any) {
       if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
-        console.info("AUTH_CONTEXT: Google Sign-In popup was closed or cancelled by the user.");
+        console.info(
+          "AUTH_CONTEXT: Google Sign-In popup was closed. This might be due to direct user cancellation, " +
+          "browser blocking third-party cookies, a browser extension interfering, or the popup closing " +
+          "unexpectedly. Please check browser settings (cookies, extensions) if not cancelled intentionally.",
+          error.message
+        );
       } else if (error.code === 'permission-denied' || error.code === 'auth/operation-not-allowed' || error.code === 'auth/unauthorized-domain') {
         console.error(
           "AUTH_CONTEXT: Google Sign-In with popup error: ", error.code, error.message, error,
           "\nTROUBLESHOOTING: This 'permission-denied' or similar error during Google Sign-In usually indicates a Firebase project configuration issue." +
           "\nPlease check the following in your Firebase Console:" +
           "\n1. Authentication -> Sign-in method -> Google: Ensure it is ENABLED." +
-          "\n2. Authentication -> Settings -> Authorized domains: Ensure your application's domain is listed." +
+          "\n2. Authentication -> Settings -> Authorized domains: Ensure your application's domain (e.g., the one in your browser's address bar when you see this error) is listed." +
           "\n3. If using a custom OAuth client, ensure it's correctly configured in Google Cloud Console and Firebase." +
-          "\n4. Check your browser for pop-up blockers or extensions that might interfere."
+          "\n4. Check your browser for pop-up blockers or extensions that might interfere, though this error code usually points more to domain/auth method config."
         );
       } else {
         console.error("AUTH_CONTEXT: Google Sign-In with popup error:", error.code, error.message, error);
       }
-      setLoading(false);
+      setLoading(false); // Ensure loading is false on error
     } finally {
       // console.log("AUTH_CONTEXT: Finished signInWithGoogle attempt.");
     }
@@ -267,3 +272,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
