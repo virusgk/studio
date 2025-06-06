@@ -9,6 +9,7 @@ const stickersCollectionRef = collection(db, 'stickers');
 export async function getStickersFromDB(): Promise<Sticker[]> {
   try {
     const q = query(stickersCollectionRef, orderBy('name'));
+    console.log("SERVER: GET_STICKERS_FROM_DB: Attempting to fetch stickers from Firestore...");
     const data = await getDocs(q);
     const stickers = data.docs.map((doc) => {
       const docData = doc.data();
@@ -17,7 +18,7 @@ export async function getStickersFromDB(): Promise<Sticker[]> {
         id: doc.id,
       } as Sticker;
     });
-    // console.log("SERVER: Fetched stickers successfully from Firestore:", stickers.length);
+    console.log("SERVER: GET_STICKERS_FROM_DB: Fetched stickers successfully from Firestore. Count:", stickers.length);
     return stickers;
   } catch (error) {
     console.error("SERVER: GET_STICKERS_FROM_DB: Error fetching stickers from Firestore: ", error);
@@ -27,13 +28,15 @@ export async function getStickersFromDB(): Promise<Sticker[]> {
 
 export async function addStickerToDB(stickerData: Omit<Sticker, 'id'>): Promise<string | null> {
   console.log("SERVER: ADD_STICKER_TO_DB: Service function invoked.");
-  console.log("SERVER: ADD_STICKER_TO_DB: Received sticker data:", JSON.stringify(stickerData, null, 2));
+  console.log("SERVER: ADD_STICKER_TO_DB: Received sticker data for add:", JSON.stringify(stickerData, null, 2));
   try {
     const dataWithTimestamps = {
       ...stickerData,
       // createdAt: Timestamp.now(), // Example: consider adding timestamps
       // updatedAt: Timestamp.now(),
     };
+    console.log("SERVER: ADD_STICKER_TO_DB: --- PREPARING TO CALL FIRESTORE addDoc ---");
+    console.log("SERVER: ADD_STICKER_TO_DB: Data being sent to addDoc:", JSON.stringify(dataWithTimestamps, null, 2));
     const docRef = await addDoc(stickersCollectionRef, dataWithTimestamps);
     console.log("SERVER: ADD_STICKER_TO_DB: Sticker added successfully to Firestore. Document ID:", docRef.id);
     return docRef.id;
@@ -51,7 +54,7 @@ export async function addStickerToDB(stickerData: Omit<Sticker, 'id'>): Promise<
         console.error("SERVER: ADD_STICKER_TO_DB: Error Stack Trace:", error.stack);
     }
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    console.error("SERVER: ADD_STICKER_TO_DB: Please check Firestore rules, data payload, and Firebase project config.");
+    console.error("SERVER: ADD_STICKER_TO_DB: Please check Firestore rules, data payload, and Firebase project config. Ensure the server action is invoked with proper Firebase Authentication context if rules require it.");
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     return `Server Error: ${fullError}`; // Return detailed error message
   }
@@ -66,6 +69,8 @@ export async function updateStickerInDB(stickerId: string, stickerData: Partial<
       ...stickerData,
       // updatedAt: Timestamp.now(), // Example: consider adding timestamps
     };
+    console.log("SERVER: UPDATE_STICKER_IN_DB: --- PREPARING TO CALL FIRESTORE updateDoc ---");
+    console.log("SERVER: UPDATE_STICKER_IN_DB: Data being sent to updateDoc for ID " + stickerId + ":", JSON.stringify(dataWithTimestamps, null, 2));
     await updateDoc(stickerDoc, dataWithTimestamps);
     console.log("SERVER: UPDATE_STICKER_IN_DB: Sticker updated successfully in Firestore for ID:", stickerId);
     return true;
@@ -91,6 +96,8 @@ export async function deleteStickerFromDB(stickerId: string): Promise<boolean | 
   console.log(`SERVER: DELETE_STICKER_FROM_DB: Service function invoked for ID: ${stickerId}.`);
   try {
     const stickerDoc = doc(db, 'stickers', stickerId);
+    console.log("SERVER: DELETE_STICKER_FROM_DB: --- PREPARING TO CALL FIRESTORE deleteDoc ---");
+    console.log("SERVER: DELETE_STICKER_FROM_DB: Attempting to delete document with ID:", stickerId);
     await deleteDoc(stickerDoc);
     console.log("SERVER: DELETE_STICKER_FROM_DB: Sticker deleted successfully from Firestore for ID:", stickerId);
     return true;
