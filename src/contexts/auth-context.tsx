@@ -24,8 +24,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Removed ADMIN_EMAIL constant
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,23 +37,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const userSnap = await getDoc(userDocRef);
 
     if (userSnap.exists()) {
-      // User exists, update last login
       await updateDoc(userDocRef, {
         lastLogin: serverTimestamp(),
-        // Optionally update displayName and photoURL if they changed
         displayName: firebaseUser.displayName,
         photoURL: firebaseUser.photoURL,
       });
       console.log("AUTH_CONTEXT: User document updated for UID:", firebaseUser.uid);
       return userSnap.data() as UserDocument;
     } else {
-      // User does not exist, create new document
       const newUserDoc: UserDocument = {
         uid: firebaseUser.uid,
         email: firebaseUser.email,
         displayName: firebaseUser.displayName,
         photoURL: firebaseUser.photoURL,
-        role: 'user', // Default role
+        role: 'user', 
         createdAt: serverTimestamp(),
         lastLogin: serverTimestamp(),
       };
@@ -74,7 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const userRole = userDocData.role;
         const isUserAdmin = userRole === 'admin';
 
-        console.log(`AUTH_CONTEXT: User role from Firestore for ${firebaseUser.email}: ${userRole}. Is admin: ${isUserAdmin}`);
+        console.log(`AUTH_CONTEXT: User role from Firestore for ${firebaseUser.email}: ${userRole}. Is admin from Firestore: ${isUserAdmin}`);
 
         const user: User = {
           uid: firebaseUser.uid,
@@ -86,10 +81,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         };
         setCurrentUser(user);
         setIsAdmin(isUserAdmin);
+        console.log(`AUTH_CONTEXT: States set in onAuthStateChanged: currentUser.email: ${user.email}, isAdmin: ${isUserAdmin}, user.role: ${user.role}`);
+
 
         if (user.uid !== 'admin-static-id') {
           await fetchAddressInternal(firebaseUser.uid);
         }
+        console.log(`AUTH_CONTEXT: BEFORE setLoading(false) - isAdmin: ${isUserAdmin}, currentUser.email: ${user.email}`);
+        setLoading(false);
       } else {
         if (currentUser?.uid !== 'admin-static-id') {
           console.log("AUTH_CONTEXT: No Firebase user (onAuthStateChanged), clearing non-static user state.");
@@ -99,9 +98,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else {
           console.log("AUTH_CONTEXT: No Firebase user (onAuthStateChanged), but current user is static admin. State retained for UI.");
         }
+        console.log(`AUTH_CONTEXT: BEFORE setLoading(false) - No Firebase user. isAdmin: ${isAdmin}, currentUser: ${currentUser?.email}`);
+        setLoading(false);
       }
-      console.log("AUTH_CONTEXT: Setting loading to false after onAuthStateChanged.");
-      setLoading(false);
     });
 
     return () => {
@@ -109,7 +108,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       unsubscribe();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // currentUser and isAdmin removed from deps to avoid re-triggering on their own change
 
   const fetchAddressInternal = async (uid: string) => {
     if (!uid || uid === 'admin-static-id') {
@@ -141,17 +140,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const provider = new GoogleAuthProvider();
     try {
       console.log("AUTH_CONTEXT: Attempting Google Sign-In with popup...");
-      setLoading(true);
+      setLoading(true); // Set loading true at the start of sign-in
       const result = await signInWithPopup(auth, provider);
+      // onAuthStateChanged will handle setting user, isAdmin, and ultimately setLoading(false)
       const loggedInUser = result.user;
 
       if (loggedInUser) {
-        const userDocData = await manageUserDocument(loggedInUser); // This will also set state via onAuthStateChanged
-        const userRole = userDocData.role;
-        const isUserAdminResult = userRole === 'admin';
-
-        console.log(`AUTH_CONTEXT: Google Sign-In successful for ${loggedInUser.email}. Role from Firestore: ${userRole}. Is admin: ${isUserAdminResult}`);
+        // Although onAuthStateChanged handles the main logic, we can still redirect here
+        // based on an immediate check after popup for quicker UI response.
+        // However, the source of truth for isAdmin comes from manageUserDocument in onAuthStateChanged.
+        console.log(`AUTH_CONTEXT: Google Sign-In popup successful for ${loggedInUser.email}. Waiting for onAuthStateChanged to confirm admin status.`);
         
+        // For redirection, it's safer to rely on the state eventually set by onAuthStateChanged
+        // But if immediate redirect is needed and we are sure manageUserDocument is fast:
+        const userDocData = await manageUserDocument(loggedInUser);
+        const isUserAdminResult = userDocData.role === 'admin';
+
         const redirectParam = searchParams.get('redirect');
         let redirectTo = '/';
         if (isUserAdminResult) {
@@ -159,24 +163,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else {
           redirectTo = (redirectParam && !redirectParam.startsWith('/admin') && redirectParam !== '/login') ? redirectParam : '/profile';
         }
-        console.log(`AUTH_CONTEXT: Redirecting to ${redirectTo} after popup sign-in.`);
+        console.log(`AUTH_CONTEXT: Redirecting to ${redirectTo} after popup sign-in based on immediate doc check.`);
         router.push(redirectTo);
       } else {
          console.error("AUTH_CONTEXT: Google Sign-In popup successful but no user object returned.");
+         setLoading(false); // Ensure loading is false if popup somehow returns no user
       }
 
     } catch (error: any) {
       console.error("AUTH_CONTEXT: Google Sign-In with popup error:", error.code, error.message, error);
-      // Error handling for popup blocked etc.
+      setLoading(false); // Ensure loading is false on error
     } finally {
-      // setLoading(false); // onAuthStateChanged will handle setting loading to false
       console.log("AUTH_CONTEXT: Finished signInWithGoogle attempt.");
     }
   };
 
   const adminLogin = async (password: string): Promise<boolean> => {
-    console.warn(
-      "AUTH_CONTEXT: Static admin login initiated. This user can manage user roles. For other database operations (like managing products), dynamic admin status from Firestore is required."
+    console.log(
+      "AUTH_CONTEXT: Static admin login initiated. This user is a client-side concept. To manage Firestore data, a dynamic admin (Google user with 'role: admin' in Firestore) is typically needed for server actions."
     );
     if (password === 'admin') {
       const adminUser: User = {
@@ -184,13 +188,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: 'admin@stickerverse.local',
         displayName: 'Admin User (Static)',
         photoURL: null,
-        isAdmin: true, // Static admin is always admin for UI purposes
-        role: 'admin', // Assign role for consistency, though not from DB
+        isAdmin: true, 
+        role: 'admin', 
       };
       setCurrentUser(adminUser);
       setIsAdmin(true);
       setUserAddress(null);
-      console.log("AUTH_CONTEXT: Static admin login successful.");
+      console.log("AUTH_CONTEXT: Static admin login successful. isAdmin set to true.");
+      console.log(`AUTH_CONTEXT: BEFORE setLoading(false) for static admin - isAdmin: true, currentUser.email: ${adminUser.email}`);
       setLoading(false);
       router.push('/admin/dashboard');
       return true;
@@ -209,21 +214,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!isStaticAdminLogout && auth.currentUser) {
         console.log("AUTH_CONTEXT: Signing out Firebase user.");
         await firebaseSignOut(auth);
+        // onAuthStateChanged will set currentUser to null and isAdmin to false
       } else {
          console.log("AUTH_CONTEXT: Clearing static admin session or no Firebase user to sign out.");
-      }
-      // onAuthStateChanged will handle resetting currentUser, isAdmin, etc.
-      // For static admin, we clear explicitly if onAuthStateChanged doesn't pick up a new user
-      if(isStaticAdminLogout){
-          setCurrentUser(null);
-          setIsAdmin(false);
-          setUserAddress(null);
+         setCurrentUser(null);
+         setIsAdmin(false);
+         setUserAddress(null);
+         setLoading(false); // Explicitly set loading for static admin logout
       }
       router.push('/login');
     } catch (error) {
       console.error("AUTH_CONTEXT: Logout Error:", error);
+      setLoading(false); // Ensure loading is false on error
     } finally {
-      // setLoading(false) will be handled by onAuthStateChanged or explicitly if static
       console.log("AUTH_CONTEXT: Logout process finished on client.");
     }
   };

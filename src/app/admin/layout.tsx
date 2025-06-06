@@ -14,8 +14,8 @@ import { AlertCircle } from 'lucide-react';
 const adminNavItems = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { name: 'Inventory', href: '/admin/inventory', icon: Package },
-  { name: 'Users', href: '/admin/users', icon: UsersIcon }, // Added Users
-  { name: 'Orders', href: '/admin/orders', icon: Package }, // Changed icon for Orders for variety
+  { name: 'Users', href: '/admin/users', icon: UsersIcon }, 
+  { name: 'Orders', href: '/admin/orders', icon: Package }, 
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
@@ -24,31 +24,43 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const { isAdmin, loading, currentUser, logout } = useAuth();
   const router = useRouter();
 
+  console.log(`ADMIN_LAYOUT: Rendering. Path: ${pathname}. Auth state - loading: ${loading}, isAdmin: ${isAdmin}, currentUser: ${currentUser?.email}`);
+
   useEffect(() => {
+    console.log(`ADMIN_LAYOUT: useEffect triggered. Path: ${pathname}. Auth state - loading: ${loading}, isAdmin: ${isAdmin}`);
     if (!loading && !isAdmin) {
+      console.log(`ADMIN_LAYOUT: Access DENIED by useEffect. Redirecting to login. loading: ${loading}, isAdmin: ${isAdmin}`);
       router.push('/login?redirect=' + pathname);
+    } else if (!loading && isAdmin) {
+      console.log(`ADMIN_LAYOUT: Access GRANTED by useEffect. loading: ${loading}, isAdmin: ${isAdmin}`);
+    } else {
+      console.log(`ADMIN_LAYOUT: useEffect - still loading or indeterminate state. loading: ${loading}, isAdmin: ${isAdmin}`);
     }
-  }, [isAdmin, loading, router, pathname]);
+  }, [isAdmin, loading, router, pathname, currentUser]); // Added currentUser to deps for more complete re-evaluation
 
   if (loading) {
+    console.log("ADMIN_LAYOUT: Showing 'Loading Admin Area...' screen.");
     return <div className="flex h-screen items-center justify-center">Loading Admin Area...</div>;
   }
 
   if (!isAdmin) {
+     console.log(`ADMIN_LAYOUT: Showing 'Access Denied' screen. loading: ${loading}, isAdmin: ${isAdmin}, currentUser: ${currentUser?.email}`);
      return (
       <div className="flex h-screen items-center justify-center p-4">
         <Alert variant="destructive" className="max-w-md">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Access Denied</AlertTitle>
           <AlertDescription>
-            You do not have permission to access this area. Please
+            You ({currentUser?.email || 'guest'}) do not have permission to access this area. Please
             <Button asChild variant="link" className="p-0 h-auto ml-1"><Link href="/login">login as an admin</Link></Button>.
+             Current auth state: loading={String(loading)}, isAdmin={String(isAdmin)}.
           </AlertDescription>
         </Alert>
       </div>
     );
   }
-
+  
+  console.log("ADMIN_LAYOUT: Access GRANTED. Rendering admin content.");
   return (
     <div className="flex min-h-screen bg-muted/40">
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col border-r bg-card sm:flex">
