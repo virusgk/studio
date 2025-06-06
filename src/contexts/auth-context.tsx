@@ -4,8 +4,8 @@
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { onAuthStateChanged, signOut as firebaseSignOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth, db } from '@/firebase/config'; // Assuming db is exported for user profile data
+import { onAuthStateChanged, signOut as firebaseSignOut, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { auth, db } from '@/firebase/config';
 import type { User, Address } from '@/types';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
@@ -15,7 +15,7 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   signInWithGoogle: () => Promise<void>;
-  adminLogin: (password: string) => Promise<boolean>; // Simplified admin login
+  adminLogin: (password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   userAddress: Address | null;
   saveAddress: (address: Address) => Promise<void>;
@@ -47,10 +47,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         };
         setCurrentUser(user);
         if (isUserAdmin) setIsAdmin(true);
-        await fetchAddressInternal(firebaseUser.uid);
-
+        if (user.uid !== 'admin-static-id') { // Don't fetch for static admin
+            await fetchAddressInternal(firebaseUser.uid);
+        }
       } else {
-        // Only reset if not the static admin
         if (currentUser?.uid !== 'admin-static-id') {
             setCurrentUser(null);
             setIsAdmin(false);
@@ -60,11 +60,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     });
 
+    // Handle redirect result from Google Sign-In
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          // User is signed in. onAuthStateChanged will handle setting state.
+          // You can access the user from result.user if needed immediately.
+          // const user = result.user;
+          // console.log("Google Sign-In via redirect successful for user:", user?.displayName);
+          // Redirect to home or intended page after successful sign-in from redirect.
+          // The onAuthStateChanged listener will also fire and set user state.
+          const redirectPath = sessionStorage.getItem('firebaseRedirectPath') || '/';
+          sessionStorage.removeItem('firebaseRedirectPath');
+          router.push(redirectPath);
+        }
+      })
+      .catch((error) => {
+        console.error("Google Sign-In Redirect Error:", error);
+        // Handle specific errors (e.g., auth/account-exists-with-different-credential)
+      })
+      .finally(() => {
+        // Ensure loading is false after attempting to get redirect result,
+        // especially if onAuthStateChanged hasn't fired yet.
+        // Be cautious here, as onAuthStateChanged might set it true then false again.
+        // setLoading(false); // This might cause a flash if onAuthStateChanged takes time.
+      });
+
+
     return () => unsubscribe();
-  }, [currentUser?.uid]); // Added currentUser?.uid to dependencies to re-evaluate if static admin logs out
+  }, [currentUser?.uid, router]);
   
   const fetchAddressInternal = async (uid: string) => {
-    if (!uid || uid === 'admin-static-id') return; // Don't fetch for static admin
+    if (!uid || uid === 'admin-static-id') return;
     try {
       const addressDocRef = doc(db, 'users', uid, 'profile', 'address');
       const addressSnap = await getDoc(addressDocRef);
@@ -80,7 +107,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
   
   const fetchAddress = async () => {
-    if (currentUser?.uid) {
+    if (currentUser?.uid && currentUser.uid !== 'admin-static-id') {
       await fetchAddressInternal(currentUser.uid);
     }
   };
@@ -90,14 +117,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const provider = new GoogleAuthProvider();
     try {
       setLoading(true);
-      await signInWithPopup(auth, provider);
-      // onAuthStateChanged will handle setting user & admin state
-      router.push('/');
+      // Store the current path to redirect back after sign-in
+      sessionStorage.setItem('firebaseRedirectPath', window.location.pathname);
+      await signInWithRedirect(auth, provider);
+      // After this call, the browser will redirect to Google.
+      // The result is handled by getRedirectResult in the useEffect hook when the page reloads.
     } catch (error) {
-      console.error("Google Sign-In Error:", error);
-      // Handle error (e.g., show toast)
-    } finally {
-      setLoading(false);
+      console.error("Google Sign-In Error (signInWithRedirect initiation):", error);
+      setLoading(false); // Ensure loading is false if the redirect initiation fails
     }
   };
 
@@ -108,16 +135,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (password === 'admin') { 
       const adminUser: User = {
         uid: 'admin-static-id',
-        email: 'admin@stickerverse.local', // This email is not checked against ADMIN_EMAIL for static login
+        email: 'admin@stickerverse.local',
         displayName: 'Admin User (Static)',
-        isAdmin: true, // Static admin is always admin
+        isAdmin: true,
       };
       setCurrentUser(adminUser);
       setIsAdmin(true);
-      setUserAddress(null); // Static admin doesn't have an address
+      setUserAddress(null);
+      setLoading(false); // setLoading false for static admin login
       router.push('/admin/dashboard');
       return true;
     }
+    setLoading(false); // setLoading false if static admin login fails
     return false;
   };
 
@@ -128,15 +157,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setCurrentUser(null);
         setIsAdmin(false);
         setUserAddress(null);
-        router.push('/login');
       } else {
         await firebaseSignOut(auth);
-        // onAuthStateChanged will handle resetting user state
-         setCurrentUser(null); // Explicitly clear user state immediately
+         setCurrentUser(null); 
          setIsAdmin(false);
          setUserAddress(null);
-        router.push('/login');
       }
+      router.push('/login');
     } catch (error) {
       console.error("Logout Error:", error);
     } finally {
@@ -147,7 +174,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const saveAddress = async (address: Address) => {
     if (!currentUser?.uid || currentUser.uid === 'admin-static-id') {
       console.error("No real user logged in or static admin cannot save address this way");
-      return;
+      throw new Error("User not authenticated to save address.");
     }
     try {
       const addressDocRef = doc(db, 'users', currentUser.uid, 'profile', 'address');
@@ -156,6 +183,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log("Address saved successfully");
     } catch (error) {
       console.error("Error saving address:", error);
+      throw error; // Re-throw to be caught by caller
     }
   };
 
