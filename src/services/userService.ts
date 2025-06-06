@@ -34,19 +34,40 @@ export async function getAllUsers(): Promise<UserDocument[]> {
 }
 
 export async function updateUserRole(userId: string, newRole: 'admin' | 'user'): Promise<boolean | string> {
-  // console.log(`SERVER: userService.updateUserRole invoked for userId: ${userId}, newRole: ${newRole}`);
+  console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: Invoked for userId: ${userId}, newRole: ${newRole}`);
   try {
     const userDocRef = doc(db, 'users', userId);
+    const updatePayload = { role: newRole };
+    
+    console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: --- PREPARING TO CALL FIRESTORE updateDoc ---`);
+    console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: Target document path: users/${userId}`);
+    console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: Payload for updateDoc: ${JSON.stringify(updatePayload)}`);
+    
     // Firestore security rules MUST allow the calling admin to update the 'role' field.
-    await updateDoc(userDocRef, { role: newRole });
-    // console.log(`SERVER: User role updated successfully for userId: ${userId} to ${newRole}`);
+    // If called by static admin via a server action, Firestore might see request.auth as null.
+    await updateDoc(userDocRef, updatePayload);
+    
+    console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: User role updated successfully in Firestore for userId: ${userId} to ${newRole}`);
     return true;
   } catch (error: any) {
     const errorCode = error.code || 'UNKNOWN_CODE';
     const errorMessage = error.message || 'Unknown Firestore error occurred.';
     const fullError = `Firebase Error (Code: ${errorCode}): ${errorMessage}`;
-    console.error(`SERVER: userService.updateUserRole: CRITICAL ERROR while updating role for user ID ${userId}:`, fullError);
-    console.error("SERVER: userService.updateUserRole: Error Object:", error);
+    
+    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    console.error(`SERVER: UPDATE_USER_ROLE_SERVICE: CRITICAL ERROR while updating role for user ID ${userId} to ${newRole}`);
+    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    console.error("SERVER: UPDATE_USER_ROLE_SERVICE: Error Object:", error);
+    console.error("SERVER: UPDATE_USER_ROLE_SERVICE: Firebase Error Code:", errorCode);
+    console.error("SERVER: UPDATE_USER_ROLE_SERVICE: Firebase Error Message:", errorMessage);
+    if (error.stack) {
+        console.error("SERVER: UPDATE_USER_ROLE_SERVICE: Error Stack Trace:", error.stack);
+    }
+    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    console.error("SERVER: UPDATE_USER_ROLE_SERVICE: Please check Firestore rules. If the static admin is making this call, Firestore rules might see the request as unauthenticated or without the expected 'admin-static-id' in 'request.auth.uid' when the server action executes.");
+    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    
     return `Server Error: ${fullError}`;
   }
 }
+
