@@ -71,9 +71,12 @@ export default function AdminInventoryPage() {
   ) => {
     setIsSubmitting(true);
     
+    console.log("CLIENT_INVENTORY_PAGE: Attempting to get ID token for save product...");
     const idToken = await getIdToken();
+    console.log(`CLIENT_INVENTORY_PAGE: Fetched ID token for save product (first 10 chars): ${idToken ? idToken.substring(0, 10) + '...' : 'NULL_TOKEN'}`);
+
     if (!idToken) {
-        toast({ title: "Authentication Error", description: "Could not get authentication token. Please log in again.", variant: "destructive", duration: 7000 });
+        toast({ title: "Authentication Error", description: "Could not get authentication token for admin operation. Please log in again.", variant: "destructive", duration: 7000 });
         setIsSubmitting(false);
         return;
     }
@@ -126,17 +129,30 @@ export default function AdminInventoryPage() {
         }
       } else {
         const result = await addStickerToDB(idToken, stickerDataPayload as Omit<Sticker, 'id'>);
-        if (result && !result.startsWith('Server Error:')) {
+        if (result && !result.startsWith('Server Action Error:') && !result.startsWith('Server Error:')) {
           success = true;
           toast({ title: "Product Added", description: `${formData.name} has been added.` });
         } else {
           serverResponseMessage = typeof result === 'string' ? result : "Failed to add product.";
-          toast({ title: "Error Adding Product", description: serverResponseMessage, variant: "destructive", duration: 10000 });
+          const detailedDescription = serverResponseMessage.includes("User is not authorized") || serverResponseMessage.includes("token is invalid")
+            ? serverResponseMessage + "\n\n" +
+              `TROUBLESHOOTING CHECKLIST for '${currentUser?.email}':\n` +
+              `1. **VERIFY YOUR ADMIN ROLE IN FIRESTORE:**\n` +
+              `   - Go to Firebase Console > Firestore Database > 'users' collection.\n` +
+              `   - Find document for UID: '${currentUser?.uid}'.\n` +
+              `   - **Ensure this document has field 'role' with *exact string value "admin"* (lowercase, no spaces).** This is CRITICAL.\n` +
+              `2. **FIREBASE ADMIN SDK INITIALIZATION:**\n` +
+              `   - Ensure 'FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON' env variable is correctly set in your .env file with your service account key.\n` +
+              `   - Check server startup logs for 'Firebase Admin SDK initialized successfully' or any errors from 'src/firebase/adminConfig.ts'. Restart server after .env changes.\n` +
+              `3. **ID TOKEN VALIDITY:** If you recently changed roles, try logging out and back in to refresh your ID token.\n` +
+              `4. **FIRESTORE RULES (If Admin SDK error):** While Admin SDK usually bypasses rules, ensure your general Firestore setup is sound. Primarily focus on points 1-3 for this error.`
+            : serverResponseMessage;
+          toast({ title: "Error Adding Product", description: detailedDescription, variant: "destructive", duration: 15000 });
         }
       }
     } catch (error: any) {
       serverResponseMessage = `An unexpected client-side error occurred. Message: ${error.message || 'Unknown error'}.`;
-      console.error(`CLIENT: CRITICAL ERROR during ${operationType} product ${formData.name}:`, error);
+      console.error(`CLIENT_INVENTORY_PAGE: CRITICAL ERROR during ${operationType} product ${formData.name}:`, error);
       toast({ title: "Critical Client Error", description: serverResponseMessage, variant: "destructive", duration: 7000 });
       success = false;
     }
@@ -152,9 +168,12 @@ export default function AdminInventoryPage() {
 
   const handleDeleteProduct = async (stickerId: string, stickerName: string) => {
     setIsSubmitting(true);
+    console.log("CLIENT_INVENTORY_PAGE: Attempting to get ID token for delete product...");
     const idToken = await getIdToken();
+    console.log(`CLIENT_INVENTORY_PAGE: Fetched ID token for delete product (first 10 chars): ${idToken ? idToken.substring(0, 10) + '...' : 'NULL_TOKEN'}`);
+
     if (!idToken) {
-        toast({ title: "Authentication Error", description: "Could not get authentication token. Please log in again.", variant: "destructive", duration: 7000 });
+        toast({ title: "Authentication Error", description: "Could not get authentication token for admin operation. Please log in again.", variant: "destructive", duration: 7000 });
         setIsSubmitting(false);
         return;
     }
@@ -172,7 +191,20 @@ export default function AdminInventoryPage() {
       await fetchStickers();
     } else {
       let serverResponseMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}.`;
-      toast({ title: "Error Deleting Product", description: serverResponseMessage, variant: "destructive", duration: 10000 });
+      const detailedDescription = serverResponseMessage.includes("User is not authorized") || serverResponseMessage.includes("token is invalid")
+            ? serverResponseMessage + "\n\n" +
+              `TROUBLESHOOTING CHECKLIST for '${currentUser?.email}':\n` +
+              `1. **VERIFY YOUR ADMIN ROLE IN FIRESTORE:**\n` +
+              `   - Go to Firebase Console > Firestore Database > 'users' collection.\n` +
+              `   - Find document for UID: '${currentUser?.uid}'.\n` +
+              `   - **Ensure this document has field 'role' with *exact string value "admin"* (lowercase, no spaces).** This is CRITICAL.\n` +
+              `2. **FIREBASE ADMIN SDK INITIALIZATION:**\n` +
+              `   - Ensure 'FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON' env variable is correctly set in your .env file with your service account key.\n` +
+              `   - Check server startup logs for 'Firebase Admin SDK initialized successfully' or any errors from 'src/firebase/adminConfig.ts'. Restart server after .env changes.\n` +
+              `3. **ID TOKEN VALIDITY:** If you recently changed roles, try logging out and back in to refresh your ID token.\n` +
+              `4. **FIRESTORE RULES (If Admin SDK error):** While Admin SDK usually bypasses rules, ensure your general Firestore setup is sound. Primarily focus on points 1-3 for this error.`
+            : serverResponseMessage;
+      toast({ title: "Error Deleting Product", description: detailedDescription, variant: "destructive", duration: 15000 });
     }
     setIsSubmitting(false);
   };

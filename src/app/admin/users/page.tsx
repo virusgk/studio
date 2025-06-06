@@ -73,9 +73,12 @@ export default function AdminUsersPage() {
     }
 
     setIsUpdatingRole(userId);
+    console.log("CLIENT_USERS_PAGE: Attempting to get ID token for role change...");
     const idToken = await getIdToken();
+    console.log(`CLIENT_USERS_PAGE: Fetched ID token for role change (first 10 chars): ${idToken ? idToken.substring(0, 10) + '...' : 'NULL_TOKEN'}`);
+    
     if (!idToken) {
-        toast({ title: "Authentication Error", description: "Could not get authentication token. Please log in again.", variant: "destructive", duration: 7000 });
+        toast({ title: "Authentication Error", description: "Could not get authentication token for admin operation. Please log in again.", variant: "destructive", duration: 7000 });
         setIsUpdatingRole(null);
         return;
     }
@@ -90,10 +93,8 @@ export default function AdminUsersPage() {
     } else {
       let detailedDescription = typeof result === 'string' ? result : "Could not update user role. Ensure you are a dynamic admin and your service account for server actions is correctly configured.";
       
-      if (typeof result === 'string' && result.includes("DYNAMIC ADMIN PERMISSION DENIED")) {
-         detailedDescription = result; // Use the detailed message from the service
-      } else if (typeof result === 'string' && result.includes("Server Action Error: User is not authorized to perform this admin operation")) {
-        detailedDescription = result + "\n\n" +
+      if (typeof result === 'string' && (result.includes("User is not authorized") || result.includes("token is invalid"))) {
+         detailedDescription = result + "\n\n" +
           `TROUBLESHOOTING CHECKLIST for '${currentUser?.email}':\n` +
           `1. **VERIFY YOUR ADMIN ROLE IN FIRESTORE:**\n` +
           `   - Go to Firebase Console > Firestore Database > 'users' collection.\n` +

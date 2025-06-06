@@ -1,12 +1,11 @@
 
 'use server';
-import { getAdminDb, getAdminAuth, admin } from '@/firebase/adminConfig'; // Use Admin SDK
+import { getAdminDb, getAdminAuth, admin } from '@/firebase/adminConfig';
 import type { Sticker } from '@/types';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-
-// Client SDK 'db' can still be used for reads if desired
 import { db } from '@/firebase/config'; 
-const stickersCollectionRef = collection(db, 'stickers'); // For reads by anyone
+
+const stickersCollectionRef = collection(db, 'stickers');
 
 
 export async function getStickersFromDB(): Promise<Sticker[]> {
@@ -27,26 +26,53 @@ export async function getStickersFromDB(): Promise<Sticker[]> {
   }
 }
 
-async function verifyAdmin(idToken: string): Promise<string | null> {
+async function verifyAdmin(idToken: string, serviceName: string = 'STICKER_SERVICE'): Promise<string | null> {
+  const logPrefix = `VERIFY_ADMIN (${serviceName})`;
   if (!idToken) {
-    console.error("SERVER_ACTION_AUTH: ID token is missing.");
+    console.error(`${logPrefix}: ID token is missing or empty.`);
     return null;
   }
+  console.log(`${logPrefix}: Received ID token (first 10 chars): ${idToken.substring(0, 10)}...`);
+
   try {
-    const adminAuth = getAdminAuth();
-    const adminDb = getAdminDb();
-    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    const adminAuth = getAdminAuth(); 
+    const adminDb = getAdminDb();   
+    
+    console.log(`${logPrefix}: Firebase Admin Auth and DB SDKs obtained.`);
+    
+    let decodedToken;
+    try {
+      decodedToken = await adminAuth.verifyIdToken(idToken);
+      console.log(`${logPrefix}: ID token successfully verified. UID: ${decodedToken.uid}, Email: ${decodedToken.email}`);
+    } catch (tokenError: any) {
+      console.error(`${logPrefix}: ID token verification FAILED. Error code: ${tokenError.code}, Message: ${tokenError.message}`, tokenError);
+      return null; 
+    }
+
     const uid = decodedToken.uid;
     const userDocRef = adminDb.collection('users').doc(uid);
+    
+    console.log(`${logPrefix}: Looking up user document at users/${uid}`);
     const userDocSnap = await userDocRef.get();
-    if (!userDocSnap.exists() || userDocSnap.data()?.role !== 'admin') {
-      console.error(`SERVER_ACTION_AUTH: User ${uid} is not authorized (not found or not admin). Role: ${userDocSnap.data()?.role}`);
-      return null;
+
+    if (!userDocSnap.exists()) {
+      console.error(`${logPrefix}: User document for UID ${uid} does NOT exist in Firestore.`);
+      return null; 
     }
-    console.log(`SERVER_ACTION_AUTH: User ${uid} verified as admin.`);
-    return uid; // Return UID if admin
-  } catch (error) {
-    console.error("SERVER_ACTION_AUTH: ID token verification failed or user lookup error.", error);
+    
+    const userData = userDocSnap.data();
+    const userRole = userData?.role;
+    console.log(`${logPrefix}: User document for UID ${uid} exists. Role found: '${userRole}'`);
+
+    if (userRole !== 'admin') {
+      console.error(`${logPrefix}: User ${uid} is NOT an admin. Role is '${userRole}'. Access denied.`);
+      return null; 
+    }
+
+    console.log(`${logPrefix}: User ${uid} successfully verified as admin. Role: '${userRole}'.`);
+    return uid; 
+  } catch (error: any) {
+    console.error(`${logPrefix}: An unexpected error occurred during admin verification. Message: ${error.message}`, error);
     return null;
   }
 }
@@ -55,7 +81,7 @@ async function verifyAdmin(idToken: string): Promise<string | null> {
 export async function addStickerToDB(idToken: string, stickerData: Omit<Sticker, 'id'>): Promise<string | null> {
   console.log("SERVER: ADD_STICKER_TO_DB: Service function invoked.");
   
-  const adminUid = await verifyAdmin(idToken);
+  const adminUid = await verifyAdmin(idToken, 'addStickerToDB');
   if (!adminUid) {
     return "Server Action Error: User is not authorized to perform this admin operation or token is invalid.";
   }
@@ -84,7 +110,7 @@ export async function addStickerToDB(idToken: string, stickerData: Omit<Sticker,
 export async function updateStickerInDB(idToken: string, stickerId: string, stickerData: Partial<Omit<Sticker, 'id'>>): Promise<boolean | string> {
   console.log(`SERVER: UPDATE_STICKER_IN_DB: Service function invoked for ID: ${stickerId}.`);
 
-  const adminUid = await verifyAdmin(idToken);
+  const adminUid = await verifyAdmin(idToken, 'updateStickerInDB');
   if (!adminUid) {
     return "Server Action Error: User is not authorized to perform this admin operation or token is invalid.";
   }
@@ -112,7 +138,7 @@ export async function updateStickerInDB(idToken: string, stickerId: string, stic
 export async function deleteStickerFromDB(idToken: string, stickerId: string): Promise<boolean | string> {
   console.log(`SERVER: DELETE_STICKER_FROM_DB: Service function invoked for ID: ${stickerId}.`);
 
-  const adminUid = await verifyAdmin(idToken);
+  const adminUid = await verifyAdmin(idToken, 'deleteStickerFromDB');
   if (!adminUid) {
     return "Server Action Error: User is not authorized to perform this admin operation or token is invalid.";
   }

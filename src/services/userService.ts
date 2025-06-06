@@ -1,32 +1,59 @@
 
 'use server';
-import { getAdminDb, getAdminAuth, admin } from '@/firebase/adminConfig'; // Use Admin SDK getters
+import { getAdminDb, getAdminAuth, admin } from '@/firebase/adminConfig';
 import type { UserDocument } from '@/types';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore'; // client SDK for reads
-import { db } from '@/firebase/config'; // client SDK 'db'
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '@/firebase/config'; 
 
-const usersCollectionRef = collection(db, 'users'); // For client-side reads if any, or public reads
+const usersCollectionRef = collection(db, 'users');
 
-async function verifyAdmin(idToken: string): Promise<string | null> {
+async function verifyAdmin(idToken: string, serviceName: string = 'USER_SERVICE'): Promise<string | null> {
+  const logPrefix = `VERIFY_ADMIN (${serviceName})`;
   if (!idToken) {
-    console.error("SERVER_ACTION_AUTH_USER_SVC: ID token is missing.");
+    console.error(`${logPrefix}: ID token is missing or empty.`);
     return null;
   }
+  console.log(`${logPrefix}: Received ID token (first 10 chars): ${idToken.substring(0, 10)}...`);
+
   try {
-    const adminAuth = getAdminAuth();
-    const adminDb = getAdminDb();
-    const decodedToken = await adminAuth.verifyIdToken(idToken);
-    const uid = decodedToken.uid;
-    const userDocRef = adminDb.collection('users').doc(uid); 
-    const userDocSnap = await userDocRef.get();
-    if (!userDocSnap.exists() || userDocSnap.data()?.role !== 'admin') {
-      console.error(`SERVER_ACTION_AUTH_USER_SVC: User ${uid} is not authorized (not found or not admin). Role: ${userDocSnap.data()?.role}`);
-      return null;
+    const adminAuth = getAdminAuth(); 
+    const adminDb = getAdminDb();   
+    
+    console.log(`${logPrefix}: Firebase Admin Auth and DB SDKs obtained.`);
+    
+    let decodedToken;
+    try {
+      decodedToken = await adminAuth.verifyIdToken(idToken);
+      console.log(`${logPrefix}: ID token successfully verified. UID: ${decodedToken.uid}, Email: ${decodedToken.email}`);
+    } catch (tokenError: any) {
+      console.error(`${logPrefix}: ID token verification FAILED. Error code: ${tokenError.code}, Message: ${tokenError.message}`, tokenError);
+      return null; 
     }
-    console.log(`SERVER_ACTION_AUTH_USER_SVC: User ${uid} verified as admin.`);
-    return uid; // Return UID if admin
-  } catch (error) {
-    console.error("SERVER_ACTION_AUTH_USER_SVC: ID token verification failed or user lookup error.", error);
+
+    const uid = decodedToken.uid;
+    const userDocRef = adminDb.collection('users').doc(uid);
+    
+    console.log(`${logPrefix}: Looking up user document at users/${uid}`);
+    const userDocSnap = await userDocRef.get();
+
+    if (!userDocSnap.exists()) {
+      console.error(`${logPrefix}: User document for UID ${uid} does NOT exist in Firestore.`);
+      return null; 
+    }
+    
+    const userData = userDocSnap.data();
+    const userRole = userData?.role;
+    console.log(`${logPrefix}: User document for UID ${uid} exists. Role found: '${userRole}'`);
+
+    if (userRole !== 'admin') {
+      console.error(`${logPrefix}: User ${uid} is NOT an admin. Role is '${userRole}'. Access denied.`);
+      return null; 
+    }
+
+    console.log(`${logPrefix}: User ${uid} successfully verified as admin. Role: '${userRole}'.`);
+    return uid; 
+  } catch (error: any) {
+    console.error(`${logPrefix}: An unexpected error occurred during admin verification. Message: ${error.message}`, error);
     return null;
   }
 }
@@ -54,7 +81,7 @@ export async function getAllUsers(): Promise<UserDocument[]> {
 export async function updateUserRole(idToken: string, userId: string, newRole: 'admin' | 'user'): Promise<boolean | string> {
   console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: Invoked for userId: ${userId}, newRole: ${newRole}`);
   
-  const adminUid = await verifyAdmin(idToken);
+  const adminUid = await verifyAdmin(idToken, 'updateUserRole'); // Pass service name for better logging
   if (!adminUid) {
     return "Server Action Error: User is not authorized to perform this admin operation or token is invalid.";
   }
@@ -70,7 +97,7 @@ export async function updateUserRole(idToken: string, userId: string, newRole: '
     const userDocRef = adminDb.collection('users').doc(userId);
     const updatePayload = { 
       role: newRole,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp() // Add updatedAt timestamp
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
     
     await userDocRef.update(updatePayload);
