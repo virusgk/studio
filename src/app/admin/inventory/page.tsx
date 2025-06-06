@@ -140,16 +140,18 @@ export default function AdminInventoryPage() {
           console.log(`CLIENT: Product ${formData.name} updated successfully.`);
         } else {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to update product. Ensure admin authentication.";
-          const detailedDescription = serverErrorMessage.includes("permission-denied")
-            ? `${serverErrorMessage} CRITICAL: Firestore permission denied. 
-              TROUBLESHOOTING:
-              1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'.
-              2. FIRESTORE RULE CHECK: In Firebase Console > Firestore > Rules, ensure the 'stickers' collection 'allow write' rule is:
-                 'allow write: if request.auth != null && request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'
-                 (Pay EXTREME attention to using '.lower()' on BOTH sides and the EXACT email match.)
-              3. ADMIN EMAIL ENV VAR: Ensure NEXT_PUBLIC_ADMIN_EMAIL in your .env file is correctly set to '${currentUser?.email?.toLowerCase()}' and your server is restarted if changed (though this is for client-side admin check; Firestore rules use the token directly).
-              4. PUBLISH RULES: Ensure Firestore rules are PUBLISHED after any changes.
-              5. SIMULATOR: Use Firestore Rules Simulator to test the write operation for '${currentUser?.email}'.`
+           const detailedDescription = serverErrorMessage.includes("permission-denied")
+            ? `FIRESTORE PERMISSION DENIED: ${serverErrorMessage}\n\n` +
+              `CRITICAL: Firestore rules are blocking this update for user '${currentUser?.email}'.\n` +
+              `TROUBLESHOOTING CHECKLIST:\n` +
+              `1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'. Your Firestore rule needs to check against this exact email.\n` +
+              `2. FIRESTORE RULE CHECK (In Firebase Console > Firestore Database > Rules tab):\n` +
+              `   - TARGET PATH: '/stickers/{stickerId}' (or the specific path for your stickers collection).\n` +
+              `   - ADMIN CHECK RULE (EXAMPLE): 'allow write: if request.auth != null && request.auth.token.email.lower() == "YOUR_ADMIN_EMAIL_HERE".lower();'\n` +
+              `   - VERIFY EMAIL IN RULE: Replace "YOUR_ADMIN_EMAIL_HERE" with your actual admin email ('${currentUser?.email?.toLowerCase()}'). It MUST BE an EXACT match (no typos, no extra spaces).\n` +
+              `   - CASE-INSENSITIVE: Ensure '.lower()' is used on BOTH 'request.auth.token.email' AND your admin email string in the rule for reliable matching.\n` +
+              `3. PUBLISH RULES: After any change to rules, YOU MUST CLICK "PUBLISH". Changes are not live otherwise.\n` +
+              `4. FIRESTORE SIMULATOR: Use the "Simulator" in the Rules tab. Test an 'update' operation on path 'stickers/${formData.id}'. Set 'Authenticated' to true, provider 'google.com', and input your admin email ('${currentUser?.email}'). It should show 'Simulated write allowed'. If not, your rule is incorrect.`
             : serverErrorMessage;
           toast({ title: "Error Updating Product", description: detailedDescription, variant: "destructive", duration: 10000 });
           console.error(`CLIENT: Failed to update product ${formData.name}. Server response: ${serverErrorMessage}`);
@@ -164,15 +166,17 @@ export default function AdminInventoryPage() {
         } else {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to add product. Ensure admin authentication.";
            const detailedDescription = serverErrorMessage.includes("permission-denied")
-            ? `${serverErrorMessage} CRITICAL: Firestore permission denied. 
-              TROUBLESHOOTING:
-              1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'.
-              2. FIRESTORE RULE CHECK: In Firebase Console > Firestore > Rules, ensure the 'stickers' collection 'allow write' rule for adding is like:
-                 'allow write: if request.auth != null && request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'
-                 (Pay EXTREME attention to using '.lower()' on BOTH sides for the email comparison and ensure the email string in the rule is EXACTLY '${currentUser?.email?.toLowerCase()}'.)
-              3. ADMIN EMAIL ENV VAR: Ensure NEXT_PUBLIC_ADMIN_EMAIL in your .env file is correctly set to '${currentUser?.email?.toLowerCase()}' and your server is restarted if changed (this affects client-side admin status; Firestore rules use the token directly).
-              4. PUBLISH RULES: Ensure Firestore rules are PUBLISHED after any changes.
-              5. SIMULATOR: Use Firestore Rules Simulator to test a 'create' operation on 'stickers/new_id' for user '${currentUser?.email}'.`
+            ? `FIRESTORE PERMISSION DENIED: ${serverErrorMessage}\n\n` +
+              `CRITICAL: Firestore rules are blocking this 'add' (create) operation for user '${currentUser?.email}'.\n` +
+              `TROUBLESHOOTING CHECKLIST:\n` +
+              `1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'. Your Firestore rule needs to check against this exact email.\n` +
+              `2. FIRESTORE RULE CHECK (In Firebase Console > Firestore Database > Rules tab):\n` +
+              `   - TARGET PATH: '/stickers/{stickerId}' (this rule applies to creating new documents in the 'stickers' collection).\n` +
+              `   - ADMIN CHECK RULE (EXAMPLE): 'allow write: if request.auth != null && request.auth.token.email.lower() == "YOUR_ADMIN_EMAIL_HERE".lower();'\n` +
+              `   - VERIFY EMAIL IN RULE: Replace "YOUR_ADMIN_EMAIL_HERE" with your actual admin email ('${currentUser?.email?.toLowerCase()}'). It MUST BE an EXACT match (no typos, no extra spaces).\n` +
+              `   - CASE-INSENSITIVE: Ensure '.lower()' is used on BOTH 'request.auth.token.email' AND your admin email string in the rule for reliable matching.\n` +
+              `3. PUBLISH RULES: After any change to rules, YOU MUST CLICK "PUBLISH". Changes are not live otherwise.\n` +
+              `4. FIRESTORE SIMULATOR: Use the "Simulator" in the Rules tab. Test a 'create' operation on path 'stickers/someNewStickerId'. Set 'Authenticated' to true, provider 'google.com', and input your admin email ('${currentUser?.email}'). It should show 'Simulated write allowed'. If not, your rule is incorrect or not targeting the 'create' operation correctly (though 'write' covers create, update, delete).`
             : serverErrorMessage;
           toast({ title: "Error Adding Product", description: detailedDescription, variant: "destructive", duration: 10000 });
           console.error(`CLIENT: Failed to add product ${formData.name}. Server response: ${serverErrorMessage}`);
@@ -224,11 +228,13 @@ export default function AdminInventoryPage() {
     } else {
       let serverErrorMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}. Ensure admin authentication.`;
       const detailedDescription = serverErrorMessage.includes("permission-denied")
-        ? `${serverErrorMessage} CRITICAL: Firestore permission denied for delete. 
-          TROUBLESHOOTING:
-          1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'.
-          2. FIRESTORE RULE CHECK: Ensure your Firestore Security Rules allow admin ('${currentUser?.email?.toLowerCase()}') to delete from 'stickers'. The rule should use '.lower()' for case-insensitive email comparison, e.g., 'request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'.
-          3. PUBLISH RULES & SIMULATOR: Confirm rules are published and test with Firestore Rules Simulator.`
+        ? `FIRESTORE PERMISSION DENIED: ${serverErrorMessage}\n\n` +
+          `CRITICAL: Firestore rules are blocking this 'delete' for user '${currentUser?.email}'.\n` +
+          `TROUBLESHOOTING:\n` +
+          `1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'.\n` +
+          `2. FIRESTORE RULE CHECK: Ensure your Firestore rule for '/stickers/{stickerId}' allows 'delete' for admin '${currentUser?.email?.toLowerCase()}' (usually covered by 'allow write', which includes delete).\n` +
+          `   - The rule 'allow write: if request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();' should work.\n` +
+          `3. PUBLISH RULES & SIMULATOR: Confirm rules are PUBLISHED and test 'delete' on 'stickers/${stickerId}' with Firestore Rules Simulator for user '${currentUser?.email}'.`
         : serverErrorMessage;
       toast({ title: "Error Deleting Product", description: detailedDescription, variant: "destructive", duration: 10000 });
       console.error(`CLIENT: Failed to delete product ${stickerName}. Server response: ${serverErrorMessage}`);
