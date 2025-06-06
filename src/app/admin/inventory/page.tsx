@@ -83,13 +83,17 @@ export default function AdminInventoryPage() {
     console.log("CLIENT: Video files selected:", videoFiles.map(f => f.name));
 
     if (currentUser?.uid === 'admin-static-id') {
-        const errorMsg = "Static admin account cannot save to the database. Please use Google Sign-In with an authorized admin email.";
+        const errorMsg = "Static admin (admin/admin) cannot save products to the database. This action requires a dynamic admin (a user logged in with Google who has 'role: admin' in their Firestore document).\n\n" +
+                         "TO CREATE YOUR FIRST DYNAMIC ADMIN:\n" +
+                         "1. LOGIN AS GOOGLE USER: Ensure the target user has logged into the app at least once with Google.\n" +
+                         "2. MANUAL FIRESTORE EDIT: Go to Firebase Console > Firestore Database > 'users' collection. Find the user's document and change their 'role' field from 'user' to 'admin'.\n" +
+                         "3. LOGIN AS DYNAMIC ADMIN: Log out, then log back in as that Google user. They can now manage inventory.";
         console.error("CLIENT: " + errorMsg);
         toast({
-            title: "Operation Denied",
+            title: "Operation Not Permitted for Static Admin",
             description: errorMsg,
             variant: "destructive",
-            duration: 7000,
+            duration: 20000,
         });
         setIsSubmitting(false);
         setIsFormOpen(false);
@@ -139,21 +143,18 @@ export default function AdminInventoryPage() {
           toast({ title: "Product Updated", description: `${formData.name} has been updated.` });
           console.log(`CLIENT: Product ${formData.name} updated successfully.`);
         } else {
-          serverErrorMessage = typeof result === 'string' ? result : "Failed to update product. Ensure admin authentication.";
+          serverErrorMessage = typeof result === 'string' ? result : "Failed to update product.";
            const detailedDescription = serverErrorMessage.includes("permission-denied")
             ? `FIRESTORE PERMISSION DENIED: ${serverErrorMessage}\n\n` +
-              `CRITICAL: Firestore rules are blocking this update for user '${currentUser?.email}'.\n` +
-              `TROUBLESHOOTING CHECKLIST:\n` +
-              `1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'. Your Firestore rule needs to check against this exact email.\n` +
-              `2. FIRESTORE RULE CHECK (In Firebase Console > Firestore Database > Rules tab):\n` +
-              `   - TARGET PATH: '/stickers/{stickerId}' (or the specific path for your stickers collection).\n` +
-              `   - ADMIN CHECK RULE (EXAMPLE): 'allow write: if request.auth != null && request.auth.token.email.lower() == "YOUR_ADMIN_EMAIL_HERE".lower();'\n` +
-              `   - VERIFY EMAIL IN RULE: Replace "YOUR_ADMIN_EMAIL_HERE" with your actual admin email ('${currentUser?.email?.toLowerCase()}'). It MUST BE an EXACT match (no typos, no extra spaces).\n` +
-              `   - CASE-INSENSITIVE: Ensure '.lower()' is used on BOTH 'request.auth.token.email' AND your admin email string in the rule for reliable matching.\n` +
-              `3. PUBLISH RULES: After any change to rules, YOU MUST CLICK "PUBLISH". Changes are not live otherwise.\n` +
-              `4. FIRESTORE SIMULATOR: Use the "Simulator" in the Rules tab. Test an 'update' operation on path 'stickers/${formData.id}'. Set 'Authenticated' to true, provider 'google.com', and input your admin email ('${currentUser?.email}'). It should show 'Simulated write allowed'. If not, your rule is incorrect.`
+              `This means your Firestore rules are not allowing your account ('${currentUser?.email}') to update products.\n\n` +
+              `TROUBLESHOOTING CHECKLIST (for 'match /stickers/{stickerId}'):\n` +
+              `1. VERIFY YOUR ROLE: Ensure your user document ('users/${currentUser?.uid}') in Firestore has the field 'role' set to the string 'admin'.\n` +
+              `2. FIRESTORE RULE CHECK: The 'allow write' rule for stickers should be:\n` +
+              `   'allow write: if request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";'\n` +
+              `3. PUBLISH RULES: Changes to Firestore rules must be PUBLISHED.\n` +
+              `4. SIMULATOR: Test an 'update' on 'stickers/${formData.id}' by your admin UID. It should show 'Simulated write allowed'.`
             : serverErrorMessage;
-          toast({ title: "Error Updating Product", description: detailedDescription, variant: "destructive", duration: 10000 });
+          toast({ title: "Error Updating Product", description: detailedDescription, variant: "destructive", duration: 15000 });
           console.error(`CLIENT: Failed to update product ${formData.name}. Server response: ${serverErrorMessage}`);
         }
       } else {
@@ -164,21 +165,18 @@ export default function AdminInventoryPage() {
           toast({ title: "Product Added", description: `${formData.name} has been added.` });
           console.log(`CLIENT: Product ${formData.name} added successfully with ID: ${result}.`);
         } else {
-          serverErrorMessage = typeof result === 'string' ? result : "Failed to add product. Ensure admin authentication.";
+          serverErrorMessage = typeof result === 'string' ? result : "Failed to add product.";
            const detailedDescription = serverErrorMessage.includes("permission-denied")
             ? `FIRESTORE PERMISSION DENIED: ${serverErrorMessage}\n\n` +
-              `CRITICAL: Firestore rules are blocking this 'add' (create) operation for user '${currentUser?.email}'.\n` +
-              `TROUBLESHOOTING CHECKLIST:\n` +
-              `1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'. Your Firestore rule needs to check against this exact email.\n` +
-              `2. FIRESTORE RULE CHECK (In Firebase Console > Firestore Database > Rules tab):\n` +
-              `   - TARGET PATH: '/stickers/{stickerId}' (this rule applies to creating new documents in the 'stickers' collection).\n` +
-              `   - ADMIN CHECK RULE (EXAMPLE): 'allow write: if request.auth != null && request.auth.token.email.lower() == "YOUR_ADMIN_EMAIL_HERE".lower();'\n` +
-              `   - VERIFY EMAIL IN RULE: Replace "YOUR_ADMIN_EMAIL_HERE" with your actual admin email ('${currentUser?.email?.toLowerCase()}'). It MUST BE an EXACT match (no typos, no extra spaces).\n` +
-              `   - CASE-INSENSITIVE: Ensure '.lower()' is used on BOTH 'request.auth.token.email' AND your admin email string in the rule for reliable matching.\n` +
-              `3. PUBLISH RULES: After any change to rules, YOU MUST CLICK "PUBLISH". Changes are not live otherwise.\n` +
-              `4. FIRESTORE SIMULATOR: Use the "Simulator" in the Rules tab. Test a 'create' operation on path 'stickers/someNewStickerId'. Set 'Authenticated' to true, provider 'google.com', and input your admin email ('${currentUser?.email}'). It should show 'Simulated write allowed'. If not, your rule is incorrect or not targeting the 'create' operation correctly (though 'write' covers create, update, delete).`
+              `This means your Firestore rules are not allowing your account ('${currentUser?.email}') to add products.\n\n` +
+              `TROUBLESHOOTING CHECKLIST (for 'match /stickers/{stickerId}'):\n` +
+              `1. VERIFY YOUR ROLE: Ensure your user document ('users/${currentUser?.uid}') in Firestore has the field 'role' set to the string 'admin'.\n` +
+              `2. FIRESTORE RULE CHECK: The 'allow write' (which covers create) rule for stickers should be:\n` +
+              `   'allow write: if request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";'\n` +
+              `3. PUBLISH RULES: Changes to Firestore rules must be PUBLISHED.\n` +
+              `4. SIMULATOR: Test a 'create' on 'stickers/someNewId' by your admin UID. It should show 'Simulated write allowed'.`
             : serverErrorMessage;
-          toast({ title: "Error Adding Product", description: detailedDescription, variant: "destructive", duration: 10000 });
+          toast({ title: "Error Adding Product", description: detailedDescription, variant: "destructive", duration: 15000 });
           console.error(`CLIENT: Failed to add product ${formData.name}. Server response: ${serverErrorMessage}`);
         }
       }
@@ -208,13 +206,13 @@ export default function AdminInventoryPage() {
     console.log("CLIENT: Is Admin (from useAuth, at delete point):", isAdmin);
 
     if (currentUser?.uid === 'admin-static-id') {
-        const errorMsg = "Static admin account cannot delete from the database. Please use Google Sign-In.";
+        const errorMsg = "Static admin (admin/admin) cannot delete products. This action requires a dynamic admin.\n\nSee product add/edit messages for how to create a dynamic admin.";
         console.error("CLIENT: " + errorMsg);
         toast({
-            title: "Operation Denied",
+            title: "Operation Not Permitted for Static Admin",
             description: errorMsg,
             variant: "destructive",
-            duration: 7000,
+            duration: 15000,
         });
         setIsSubmitting(false);
         return;
@@ -226,17 +224,16 @@ export default function AdminInventoryPage() {
       console.log(`CLIENT: Product ${stickerName} deleted successfully.`);
       await fetchStickers();
     } else {
-      let serverErrorMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}. Ensure admin authentication.`;
+      let serverErrorMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}.`;
       const detailedDescription = serverErrorMessage.includes("permission-denied")
         ? `FIRESTORE PERMISSION DENIED: ${serverErrorMessage}\n\n` +
-          `CRITICAL: Firestore rules are blocking this 'delete' for user '${currentUser?.email}'.\n` +
-          `TROUBLESHOOTING:\n` +
-          `1. VERIFY LOGGED-IN EMAIL: You are logged in as '${currentUser?.email}'.\n` +
-          `2. FIRESTORE RULE CHECK: Ensure your Firestore rule for '/stickers/{stickerId}' allows 'delete' for admin '${currentUser?.email?.toLowerCase()}' (usually covered by 'allow write', which includes delete).\n` +
-          `   - The rule 'allow write: if request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();' should work.\n` +
-          `3. PUBLISH RULES & SIMULATOR: Confirm rules are PUBLISHED and test 'delete' on 'stickers/${stickerId}' with Firestore Rules Simulator for user '${currentUser?.email}'.`
+          `This means your Firestore rules are not allowing your account ('${currentUser?.email}') to delete products.\n\n` +
+          `TROUBLESHOOTING (for 'match /stickers/{stickerId}'):\n` +
+          `1. VERIFY YOUR ROLE: Ensure your user document ('users/${currentUser?.uid}') in Firestore has 'role: "admin"'.\n` +
+          `2. FIRESTORE RULE CHECK: The 'allow write' (which covers delete) for stickers is: 'allow write: if request.auth != null && exists(...) && get(...).data.role == "admin";'\n` +
+          `3. PUBLISH RULES & SIMULATOR: Confirm rules are PUBLISHED and test 'delete' on 'stickers/${stickerId}' with Firestore Rules Simulator for your admin UID.`
         : serverErrorMessage;
-      toast({ title: "Error Deleting Product", description: detailedDescription, variant: "destructive", duration: 10000 });
+      toast({ title: "Error Deleting Product", description: detailedDescription, variant: "destructive", duration: 15000 });
       console.error(`CLIENT: Failed to delete product ${stickerName}. Server response: ${serverErrorMessage}`);
     }
     setIsSubmitting(false);
@@ -356,13 +353,13 @@ export default function AdminInventoryPage() {
                   </TableCell>
                   <TableCell className="font-body text-muted-foreground">{sticker.category || 'Uncategorized'}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" className="hover:text-primary" onClick={() => handleOpenForm(sticker)}>
+                    <Button variant="ghost" size="icon" className="hover:text-primary" onClick={() => handleOpenForm(sticker)} disabled={currentUser?.uid === 'admin-static-id'}>
                       <Edit3 className="h-4 w-4" />
                       <span className="sr-only">Edit</span>
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="hover:text-destructive" disabled={isSubmitting}>
+                        <Button variant="ghost" size="icon" className="hover:text-destructive" disabled={isSubmitting || currentUser?.uid === 'admin-static-id'}>
                           <Trash2 className="h-4 w-4" />
                           <span className="sr-only">Delete</span>
                         </Button>

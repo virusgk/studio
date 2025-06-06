@@ -62,6 +62,21 @@ export default function AdminUsersPage() {
       return;
     }
 
+    if (currentUser?.uid === 'admin-static-id') {
+      toast({
+        title: "Operation Not Permitted for Static Admin",
+        description: "The static admin (admin/admin) cannot change user roles. This action requires a dynamic admin (a user logged in with Google who has 'role: admin' in their Firestore document).\n\n" +
+                     "TO CREATE YOUR FIRST DYNAMIC ADMIN:\n" +
+                     "1. LOGIN AS GOOGLE USER: Ensure the target user has logged into the app at least once with Google.\n" +
+                     "2. MANUAL FIRESTORE EDIT: Go to Firebase Console > Firestore Database > 'users' collection. Find the user's document and change their 'role' field from 'user' to 'admin'.\n" +
+                     "3. LOGIN AS DYNAMIC ADMIN: Log out, then log back in as that Google user. They can now manage roles.",
+        variant: "destructive",
+        duration: 20000,
+      });
+      return;
+    }
+
+
     setIsUpdatingRole(userId);
     const result = await updateUserRole(userId, newRole);
     if (result === true) {
@@ -73,31 +88,15 @@ export default function AdminUsersPage() {
     } else {
       let detailedDescription = typeof result === 'string' ? result : "Could not update user role. Check Firestore rules and server logs.";
       
-      if (currentUser?.uid === 'admin-static-id' && typeof result === 'string' && result.includes("permission-denied")) {
-        detailedDescription = `STATIC ADMIN PERMISSION DENIED: ${result}\n\n` +
-        `IMPORTANT: The 'static admin' (admin/admin login) is a client-side concept and does NOT have a real Firebase Authentication session that server-side Firestore rules can verify with 'request.auth.uid == "admin-static-id"'. When a server action (like updating a role) is called by the static admin, Firestore sees the request as unauthenticated or without the expected 'admin-static-id' in 'request.auth'.\n\n` +
-        `TO MAKE A USER ADMIN (BOOTSTRAP FIRST DYNAMIC ADMIN):\n` +
-        `1. LOGIN AS GOOGLE USER: Ensure the target user (e.g., your.email@example.com) has logged into the app at least once with Google. This creates their document in Firestore (users/{their_uid}) with 'role: "user"'.\n` +
-        `2. MANUAL FIRESTORE EDIT (RECOMMENDED FOR FIRST ADMIN):\n` +
-        `   a. Go to your Firebase Console -> Firestore Database.\n` +
-        `   b. Find the 'users' collection, then the document for the target user (e.g., document ID matching their UID, or find by email).\n` +
-        `   c. Manually change the 'role' field in that document from 'user' to 'admin'.\n` +
-        `3. LOGIN AS DYNAMIC ADMIN: Log out, then log back into the app as that Google user. They are now a dynamic admin.\n` +
-        `4. MANAGE ROLES: As this dynamic admin, you can now use this 'User Management' page to change roles for other users. Firestore rules allow users with 'role: "admin"' in their Firestore document to update other users' roles.\n\n` +
-        `Your Firestore rule for dynamic admins to update roles (in 'match /users/{userId}'):\n` +
-        `'allow update: if ... (exists(...) && get(...).data.role == "admin" && request.resource.data.keys().hasAny(["role", "lastLogin"])) ... ;'\n` +
-        `Ensure this rule is correctly published for dynamic admins.`;
-      } else if (typeof result === 'string' && result.includes("permission-denied")) {
-        // For dynamic admin failures
+      if (typeof result === 'string' && result.includes("permission-denied")) {
          detailedDescription = `DYNAMIC ADMIN PERMISSION DENIED: ${result}\n\n` +
-        `This likely means your Firestore rules are not allowing a user with role 'admin' to update other user roles.\n\n` +
+        `This means your Firestore rules are not allowing your account ('${currentUser?.email}') to update other user roles.\n\n` +
         `TROUBLESHOOTING CHECKLIST (for 'match /users/{userId}'):\n` +
-        `1. VERIFY UPDATER'S ROLE: Ensure the currently logged-in user ('${currentUser?.email}') has 'role: "admin"' in their Firestore document ('users/${currentUser?.uid}').\n` +
-        `2. FIRESTORE RULE CHECK: The 'allow update' rule should include a condition like:\n` +
-        `   '(request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin" && request.resource.data.keys().hasAny(["role", "lastLogin"]))'\n` +
-        `3. ALLOWED FIELDS: Ensure the rule allows updating the 'role' field (e.g., using 'request.resource.data.keys().hasAny(["role", "lastLogin"])').\n` +
-        `4. PUBLISH RULES: Changes to Firestore rules must be PUBLISHED.\n` +
-        `5. SIMULATOR: Test an 'update' on 'users/someOtherUserId' by a user whose UID has 'role: "admin"' in their own document. Request data: {'role': 'admin'}.`;
+        `1. VERIFY YOUR ROLE: Ensure your user document ('users/${currentUser?.uid}') in Firestore has the field 'role' set to the string 'admin'.\n` +
+        `2. FIRESTORE RULE CHECK: The 'allow update' rule should be:\n` +
+        `   'allow update: if request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin" && request.resource.data.keys().hasAny(["role", "lastLogin"]);'\n` +
+        `3. PUBLISH RULES: Changes to Firestore rules must be PUBLISHED.\n` +
+        `4. SIMULATOR: Test an 'update' on 'users/someOtherUserId' by your admin UID. Request data: {'role': 'admin'}.`;
       }
 
       toast({
@@ -139,7 +138,7 @@ export default function AdminUsersPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline">All Users</CardTitle>
-            <CardDescription className="font-body">View and manage user roles. Roles are managed by dynamic admins (users with 'role: admin' in Firestore). The static 'admin/admin' login can view this page but may not be able to change roles due to Firestore rule limitations (see error messages if updates fail).</CardDescription>
+            <CardDescription className="font-body">View and manage user roles. Role changes require dynamic admin privileges (a Google-authenticated user with 'role: "admin"' in their Firestore document). The static 'admin/admin' login can view this page but cannot change roles.</CardDescription>
           </CardHeader>
           <CardContent>
             {users.length === 0 ? (
@@ -185,7 +184,7 @@ export default function AdminUsersPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              disabled={isUpdatingRole === user.uid || (user.uid === currentUser?.uid && user.role === 'admin' && currentUser?.uid !== 'admin-static-id')}
+                              disabled={isUpdatingRole === user.uid || (user.uid === currentUser?.uid && user.role === 'admin' && currentUser?.uid !== 'admin-static-id') || currentUser?.uid === 'admin-static-id'}
                               className={user.role === 'admin' ? "hover:bg-destructive/10 hover:border-destructive hover:text-destructive" : "hover:bg-primary/10 hover:border-primary hover:text-primary"}
                             >
                               {isUpdatingRole === user.uid ? (
