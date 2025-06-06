@@ -1,0 +1,79 @@
+import type { Sticker, MaterialOption } from '@/types';
+
+export const STICKER_MATERIALS: MaterialOption[] = [
+  { id: 'vinyl-glossy', name: 'Vinyl (Glossy)', description: 'Durable, waterproof, shiny finish.' },
+  { id: 'vinyl-matte', name: 'Vinyl (Matte)', description: 'Durable, waterproof, non-reflective finish.' },
+  { id: 'paper-glossy', name: 'Paper (Glossy)', description: 'Standard paper, shiny finish, for indoor use.' },
+  { id: 'paper-matte', name: 'Paper (Matte)', description: 'Standard paper, non-reflective, for indoor use.' },
+  { id: 'holographic', name: 'Holographic', description: 'Eye-catching rainbow effect.' },
+];
+
+
+export const MOCK_STICKERS: Sticker[] = [
+  {
+    id: 'sticker-001',
+    name: 'Cosmic Cat',
+    description: 'A cool cat astronaut floating in space. Perfect for laptops and notebooks.',
+    imageUrl: 'https://placehold.co/300x300.png',
+    price: 3.99,
+    category: 'Animals',
+    tags: ['cat', 'space', 'astronaut', 'cute'],
+    availableMaterials: ['vinyl-glossy', 'vinyl-matte', 'holographic'],
+    stock: 100,
+  },
+  {
+    id: 'sticker-002',
+    name: 'Geometric Bear',
+    description: 'A minimalist bear design made of geometric shapes. Adds a modern touch.',
+    imageUrl: 'https://placehold.co/300x300.png',
+    price: 4.50,
+    category: 'Abstract',
+    tags: ['bear', 'geometric', 'minimalist', 'modern'],
+    availableMaterials: ['vinyl-matte', 'paper-matte'],
+    stock: 75,
+  },
+  {
+    id: 'sticker-003',
+    name: 'Coding Fuel',
+    description: '"Powered by Coffee and Code" - a must-have for developers.',
+    imageUrl: 'https://placehold.co/300x300.png',
+    price: 3.49,
+    category: 'Quotes',
+    tags: ['code', 'coffee', 'developer', 'funny'],
+    availableMaterials: ['vinyl-glossy', 'paper-glossy'],
+    stock: 120,
+  },
+  {
+    id: 'sticker-004',
+    name: 'Pastel Mountains',
+    description: 'Serene mountain landscape in beautiful pastel colors.',
+    imageUrl: 'https://placehold.co/300x300.png',
+    price: 4.99,
+    category: 'Nature',
+    tags: ['mountains', 'nature', 'pastel', 'landscape'],
+    availableMaterials: ['vinyl-matte', 'holographic'],
+    stock: 0, // Out of stock example
+  },
+  {
+    id: 'sticker-005',
+    name: 'Retro Gamer',
+    description: 'Pixel art controller for the nostalgic gamer.',
+    imageUrl: 'https://placehold.co/300x300.png',
+    price: 3.75,
+    category: 'Gaming',
+    tags: ['gaming', 'retro', 'pixel art', 'controller'],
+    availableMaterials: ['vinyl-glossy', 'holographic'],
+    stock: 90,
+  },
+  {
+    id: 'sticker-006',
+    name: 'Floral Skull',
+    description: 'An intricate skull design adorned with blooming flowers.',
+    imageUrl: 'https://placehold.co/300x300.png',
+    price: 5.25,
+    category: 'Artistic',
+    tags: ['skull', 'floral', 'gothic', 'art'],
+    availableMaterials: ['vinyl-glossy', 'vinyl-matte'],
+    stock: 60,
+  },
+];
