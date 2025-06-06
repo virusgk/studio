@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -23,6 +24,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@stickerverse.com';
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,34 +36,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        // Check for admin (e.g., specific UID or custom claim if set up)
-        // For this example, we'll assume a specific email might be admin, or rely on manual adminLogin
-        const isUserAdmin = firebaseUser.email === 'admin@stickerverse.com'; // Example admin email
+        const isUserAdmin = firebaseUser.email === ADMIN_EMAIL;
         
         const user: User = {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
           photoURL: firebaseUser.photoURL,
-          isAdmin: isUserAdmin, // Initial check based on Google user
+          isAdmin: isUserAdmin, 
         };
         setCurrentUser(user);
-        if (isUserAdmin) setIsAdmin(true); // If Google user is admin
+        if (isUserAdmin) setIsAdmin(true);
         await fetchAddressInternal(firebaseUser.uid);
 
       } else {
-        setCurrentUser(null);
-        setIsAdmin(false);
-        setUserAddress(null);
+        // Only reset if not the static admin
+        if (currentUser?.uid !== 'admin-static-id') {
+            setCurrentUser(null);
+            setIsAdmin(false);
+            setUserAddress(null);
+        }
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [currentUser?.uid]); // Added currentUser?.uid to dependencies to re-evaluate if static admin logs out
   
   const fetchAddressInternal = async (uid: string) => {
-    if (!uid) return;
+    if (!uid || uid === 'admin-static-id') return; // Don't fetch for static admin
     try {
       const addressDocRef = doc(db, 'users', uid, 'profile', 'address');
       const addressSnap = await getDoc(addressDocRef);
@@ -85,27 +89,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     try {
+      setLoading(true);
       await signInWithPopup(auth, provider);
-      // onAuthStateChanged will handle setting user
+      // onAuthStateChanged will handle setting user & admin state
       router.push('/');
     } catch (error) {
       console.error("Google Sign-In Error:", error);
       // Handle error (e.g., show toast)
+    } finally {
+      setLoading(false);
     }
   };
 
   const adminLogin = async (password: string): Promise<boolean> => {
-    // This is a simplified, "fake" admin login for UI demonstration
-    // In a real app, this would involve checking credentials against a secure backend or Firebase Auth with custom claims
-    if (password === 'admin') { // Static password
+    console.warn(
+        "Using static admin login. This is for UI demonstration only and will NOT work for database operations requiring Firebase authentication (e.g., adding products with restrictive Firestore rules). For full admin functionality, sign in via Google with the designated admin email."
+      );
+    if (password === 'admin') { 
       const adminUser: User = {
         uid: 'admin-static-id',
-        email: 'admin@stickerverse.local',
-        displayName: 'Admin User',
-        isAdmin: true,
+        email: 'admin@stickerverse.local', // This email is not checked against ADMIN_EMAIL for static login
+        displayName: 'Admin User (Static)',
+        isAdmin: true, // Static admin is always admin
       };
       setCurrentUser(adminUser);
       setIsAdmin(true);
+      setUserAddress(null); // Static admin doesn't have an address
       router.push('/admin/dashboard');
       return true;
     }
@@ -114,7 +123,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     try {
-      // If the current user is the static admin, just reset state
+      setLoading(true);
       if (currentUser?.uid === 'admin-static-id') {
         setCurrentUser(null);
         setIsAdmin(false);
@@ -122,21 +131,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         router.push('/login');
       } else {
         await firebaseSignOut(auth);
-        // onAuthStateChanged will handle resetting user
+        // onAuthStateChanged will handle resetting user state
+         setCurrentUser(null); // Explicitly clear user state immediately
+         setIsAdmin(false);
+         setUserAddress(null);
         router.push('/login');
       }
     } catch (error) {
       console.error("Logout Error:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
   const saveAddress = async (address: Address) => {
     if (!currentUser?.uid || currentUser.uid === 'admin-static-id') {
-      console.error("No user logged in or admin cannot save address this way");
+      console.error("No real user logged in or static admin cannot save address this way");
       return;
     }
     try {
-      // Store address in Firestore: users/{uid}/profile/address
       const addressDocRef = doc(db, 'users', currentUser.uid, 'profile', 'address');
       await setDoc(addressDocRef, address);
       setUserAddress(address);
@@ -160,3 +173,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
