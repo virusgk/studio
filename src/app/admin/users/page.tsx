@@ -53,7 +53,6 @@ export default function AdminUsersPage() {
   const handleRoleChange = async (userId: string, currentRole: 'admin' | 'user') => {
     const newRole = currentRole === 'admin' ? 'user' : 'admin';
     
-    // Prevent dynamic admin from revoking their own admin status
     if (userId === currentUser?.uid && newRole === 'user' && currentUser?.role === 'admin' && currentUser.uid !== 'admin-static-id') {
       toast({
         title: "Action Denied",
@@ -70,28 +69,42 @@ export default function AdminUsersPage() {
         title: "Role Updated",
         description: `User role changed to ${newRole}.`,
       });
-      await fetchUsers(); // Re-fetch users to update the table
+      await fetchUsers(); 
     } else {
       let detailedDescription = typeof result === 'string' ? result : "Could not update user role. Check Firestore rules and server logs.";
       
-      // Enhance message if static admin faces permission issue
       if (currentUser?.uid === 'admin-static-id' && typeof result === 'string' && result.includes("permission-denied")) {
         detailedDescription = `STATIC ADMIN PERMISSION DENIED: ${result}\n\n` +
-        `This means the Firestore rule for '/users/{userId}' (allow update) is not correctly configured for the static admin ('admin-static-id').\n\n` +
-        `TROUBLESHOOTING CHECKLIST:\n` +
-        `1. VERIFY FIRESTORE RULE: In Firebase Console > Firestore > Rules, ensure 'allow update' for 'match /users/{userId}' path includes a condition specifically for the static admin. It should look similar to:\n` +
-        `   '(request.auth != null && request.auth.uid == 'admin-static-id' && request.resource.data.keys().hasAny(['role', 'lastLogin']))'\n` +
-        `2. EXACT STATIC ID: Ensure 'admin-static-id' in the rule EXACTLY matches the ID used in the application's AuthContext.\n` +
-        `3. ALLOWED FIELDS: The rule example restricts static admin to update only 'role' and/or 'lastLogin'. Ensure the updateUserRole service is only attempting to update these.\n` +
-        `4. PUBLISH RULES: Crucially, ensure any changes to Firestore rules are PUBLISHED. Changes are not live otherwise.\n` +
-        `5. SIMULATOR: Use the Firestore Rules Simulator to test an 'update' operation on a path like 'users/someUserId' with 'Authenticated' checked, Provider 'custom', and UID 'admin-static-id'. The request data should be e.g., {'role': 'admin'}. It should be ALLOWED.`;
+        `IMPORTANT: The 'static admin' (admin/admin login) is a client-side concept and does NOT have a real Firebase Authentication session that server-side Firestore rules can verify with 'request.auth.uid == "admin-static-id"'. When a server action (like updating a role) is called by the static admin, Firestore sees the request as unauthenticated or without the expected 'admin-static-id' in 'request.auth'.\n\n` +
+        `TO MAKE A USER ADMIN (BOOTSTRAP FIRST DYNAMIC ADMIN):\n` +
+        `1. LOGIN AS GOOGLE USER: Ensure the target user (e.g., your.email@example.com) has logged into the app at least once with Google. This creates their document in Firestore (users/{their_uid}) with 'role: "user"'.\n` +
+        `2. MANUAL FIRESTORE EDIT (RECOMMENDED FOR FIRST ADMIN):\n` +
+        `   a. Go to your Firebase Console -> Firestore Database.\n` +
+        `   b. Find the 'users' collection, then the document for the target user (e.g., document ID matching their UID, or find by email).\n` +
+        `   c. Manually change the 'role' field in that document from 'user' to 'admin'.\n` +
+        `3. LOGIN AS DYNAMIC ADMIN: Log out, then log back into the app as that Google user. They are now a dynamic admin.\n` +
+        `4. MANAGE ROLES: As this dynamic admin, you can now use this 'User Management' page to change roles for other users. Firestore rules allow users with 'role: "admin"' in their Firestore document to update other users' roles.\n\n` +
+        `Your Firestore rule for dynamic admins to update roles (in 'match /users/{userId}'):\n` +
+        `'allow update: if ... (exists(...) && get(...).data.role == "admin" && request.resource.data.keys().hasAny(["role", "lastLogin"])) ... ;'\n` +
+        `Ensure this rule is correctly published for dynamic admins.`;
+      } else if (typeof result === 'string' && result.includes("permission-denied")) {
+        // For dynamic admin failures
+         detailedDescription = `DYNAMIC ADMIN PERMISSION DENIED: ${result}\n\n` +
+        `This likely means your Firestore rules are not allowing a user with role 'admin' to update other user roles.\n\n` +
+        `TROUBLESHOOTING CHECKLIST (for 'match /users/{userId}'):\n` +
+        `1. VERIFY UPDATER'S ROLE: Ensure the currently logged-in user ('${currentUser?.email}') has 'role: "admin"' in their Firestore document ('users/${currentUser?.uid}').\n` +
+        `2. FIRESTORE RULE CHECK: The 'allow update' rule should include a condition like:\n` +
+        `   '(request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin" && request.resource.data.keys().hasAny(["role", "lastLogin"]))'\n` +
+        `3. ALLOWED FIELDS: Ensure the rule allows updating the 'role' field (e.g., using 'request.resource.data.keys().hasAny(["role", "lastLogin"])').\n` +
+        `4. PUBLISH RULES: Changes to Firestore rules must be PUBLISHED.\n` +
+        `5. SIMULATOR: Test an 'update' on 'users/someOtherUserId' by a user whose UID has 'role: "admin"' in their own document. Request data: {'role': 'admin'}.`;
       }
 
       toast({
         title: "Error Updating Role",
         description: detailedDescription,
         variant: "destructive",
-        duration: 12000, // Increased duration for more detailed message
+        duration: 20000, 
       });
     }
     setIsUpdatingRole(null);
@@ -126,7 +139,7 @@ export default function AdminUsersPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline">All Users</CardTitle>
-            <CardDescription className="font-body">View and manage user roles in the system.</CardDescription>
+            <CardDescription className="font-body">View and manage user roles. Roles are managed by dynamic admins (users with 'role: admin' in Firestore). The static 'admin/admin' login can view this page but may not be able to change roles due to Firestore rule limitations (see error messages if updates fail).</CardDescription>
           </CardHeader>
           <CardContent>
             {users.length === 0 ? (
@@ -164,9 +177,8 @@ export default function AdminUsersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        {/* Prevent static admin from changing its own (non-existent) role or demoting itself from UI */}
-                        {user.uid === 'admin-static-id' ? (
-                            <Badge variant="outline">Static Admin</Badge>
+                        {user.uid === 'admin-static-id' && currentUser?.uid === 'admin-static-id' ? (
+                            <Badge variant="outline">Static Admin (Self)</Badge>
                         ) : (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -192,7 +204,7 @@ export default function AdminUsersPage() {
                               <AlertDialogDescription>
                                 Are you sure you want to change the role of <strong>{user.displayName || user.email}</strong> to <strong>{user.role === 'admin' ? 'User' : 'Admin'}</strong>?
                                 {user.uid === currentUser?.uid && user.role === 'admin' && currentUser?.uid !== 'admin-static-id' && (
-                                  <p className="mt-2 text-destructive font-semibold">Warning: You are about to change your own role!</p>
+                                  <p className="mt-2 text-destructive font-semibold">Warning: You are about to change your own role to User! You will lose admin privileges.</p>
                                 )}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
