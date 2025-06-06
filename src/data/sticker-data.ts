@@ -1,3 +1,4 @@
+
 import type { Sticker, MaterialOption } from '@/types';
 
 export const STICKER_MATERIALS: MaterialOption[] = [
@@ -14,7 +15,7 @@ export const MOCK_STICKERS: Sticker[] = [
     id: 'sticker-001',
     name: 'Cosmic Cat',
     description: 'A cool cat astronaut floating in space. Perfect for laptops and notebooks.',
-    imageUrl: 'https://placehold.co/300x300.png',
+    imageUrls: ['https://placehold.co/300x300.png'],
     price: 3.99,
     category: 'Animals',
     tags: ['cat', 'space', 'astronaut', 'cute'],
@@ -25,7 +26,7 @@ export const MOCK_STICKERS: Sticker[] = [
     id: 'sticker-002',
     name: 'Geometric Bear',
     description: 'A minimalist bear design made of geometric shapes. Adds a modern touch.',
-    imageUrl: 'https://placehold.co/300x300.png',
+    imageUrls: ['https://placehold.co/300x300.png'],
     price: 4.50,
     category: 'Abstract',
     tags: ['bear', 'geometric', 'minimalist', 'modern'],
@@ -36,7 +37,7 @@ export const MOCK_STICKERS: Sticker[] = [
     id: 'sticker-003',
     name: 'Coding Fuel',
     description: '"Powered by Coffee and Code" - a must-have for developers.',
-    imageUrl: 'https://placehold.co/300x300.png',
+    imageUrls: ['https://placehold.co/300x300.png'],
     price: 3.49,
     category: 'Quotes',
     tags: ['code', 'coffee', 'developer', 'funny'],
@@ -47,18 +48,18 @@ export const MOCK_STICKERS: Sticker[] = [
     id: 'sticker-004',
     name: 'Pastel Mountains',
     description: 'Serene mountain landscape in beautiful pastel colors.',
-    imageUrl: 'https://placehold.co/300x300.png',
+    imageUrls: ['https://placehold.co/300x300.png'],
     price: 4.99,
     category: 'Nature',
     tags: ['mountains', 'nature', 'pastel', 'landscape'],
     availableMaterials: ['vinyl-matte', 'holographic'],
-    stock: 0, // Out of stock example
+    stock: 0, 
   },
   {
     id: 'sticker-005',
     name: 'Retro Gamer',
     description: 'Pixel art controller for the nostalgic gamer.',
-    imageUrl: 'https://placehold.co/300x300.png',
+    imageUrls: ['https://placehold.co/300x300.png'],
     price: 3.75,
     category: 'Gaming',
     tags: ['gaming', 'retro', 'pixel art', 'controller'],
@@ -69,7 +70,7 @@ export const MOCK_STICKERS: Sticker[] = [
     id: 'sticker-006',
     name: 'Floral Skull',
     description: 'An intricate skull design adorned with blooming flowers.',
-    imageUrl: 'https://placehold.co/300x300.png',
+    imageUrls: ['https://placehold.co/300x300.png'],
     price: 5.25,
     category: 'Artistic',
     tags: ['skull', 'floral', 'gothic', 'art'],

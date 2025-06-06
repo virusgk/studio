@@ -1,90 +1,94 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 340 67% 94%; /* Light Pastel Pink */
-    --foreground: 337 60% 25%; /* Darker Pink/Maroon for text */
+    /* Dark Theme inspired by "Think Stick It" image */
+    --background: 220 20% 12%; /* Dark Slate Blue/Grey */
+    --foreground: 220 15% 88%; /* Light Grey/Off-white */
 
-    --card: 340 75% 97%; /* Lighter/whiter pink for cards */
-    --card-foreground: 337 60% 25%; /* Same as main foreground */
+    --card: 220 20% 18%; /* Slightly Lighter Dark Slate */
+    --card-foreground: 220 15% 88%;
 
-    --popover: 340 75% 97%; /* Consistent with card */
-    --popover-foreground: 337 60% 25%;
+    --popover: 220 20% 15%;
+    --popover-foreground: 220 15% 88%;
 
-    --primary: 337 72% 48%; /* Vibrant Pink */
-    --primary-foreground: 0 0% 98%; /* White/Very Light */
+    --primary: 180 65% 50%; /* Teal/Cyan */
+    --primary-foreground: 220 20% 10%; /* Dark text for contrast on primary buttons */
 
-    --secondary: 337 50% 88%; /* Lighter, less saturated pink */
-    --secondary-foreground: 337 70% 40%; /* Darker pink for contrast on secondary */
+    --secondary: 220 15% 30%; /* Muted Dark Blue */
+    --secondary-foreground: 220 15% 88%;
 
-    --muted: 340 40% 92%; /* Very light greyish pink */
-    --muted-foreground: 340 15% 55%; /* Muted grey text */
+    --muted: 220 15% 25%;
+    --muted-foreground: 220 10% 60%;
 
-    --accent: 211 78% 49%; /* Electric Blue */
-    --accent-foreground: 0 0% 98%; /* White/Very Light */
-
-    --destructive: 0 84.2% 60.2%; /* Default red for destructive actions */
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 337 40% 88%; /* Border color, sync with secondary or a bit darker */
-    --input: 337 40% 88%;   /* Input background/border */
-    --ring: 211 78% 49%;    /* Ring color (focus) - accent blue */
+    --accent: 35 90% 55%; /* Orange/Yellow for CTAs like "Start Customizing" */
+    --accent-foreground: 220 20% 10%; /* Dark text for contrast on accent buttons */
     
-    --radius: 0.75rem; /* Slightly more rounded corners for playful feel */
+    --destructive: 0 70% 55%; /* Adjusted Red for dark theme */
+    --destructive-foreground: 0 0% 100%;
 
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --border: 220 15% 25%;
+    --input: 220 15% 22%;
+    --ring: 180 70% 60%; /* Brighter Teal/Cyan for focus rings */
+    
+    --radius: 0.5rem; /* Standard radius from image */
 
-    --sidebar-background: 340 60% 92%; /* Sidebar slightly different from main bg */
-    --sidebar-foreground: 337 60% 25%;
-    --sidebar-primary: 337 72% 48%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 211 78% 49%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 337 40% 85%;
-    --sidebar-ring: 211 78% 49%;
+    --chart-1: 180 70% 50%; /* Teal */
+    --chart-2: 210 70% 60%; /* Blue */
+    --chart-3: 35 90% 55%;  /* Orange */
+    --chart-4: 300 60% 60%; /* Purple */
+    --chart-5: 120 50% 55%; /* Green */
+
+    /* Sidebar variables for dark theme - can be same as main if no distinct sidebar style */
+    --sidebar-background: 220 20% 15%;
+    --sidebar-foreground: 220 15% 88%;
+    --sidebar-primary: 180 65% 50%;
+    --sidebar-primary-foreground: 220 20% 10%;
+    --sidebar-accent: 35 90% 55%;
+    --sidebar-accent-foreground: 220 20% 10%;
+    --sidebar-border: 220 15% 25%;
+    --sidebar-ring: 180 70% 60%;
   }
 
   .dark {
-    /* Keeping default dark theme for now, can be customized later if needed */
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    /* Ensuring dark theme variables are also set under .dark if it's ever used, though :root is primary for always-dark */
+    --background: 220 20% 12%;
+    --foreground: 220 15% 88%;
+    --card: 220 20% 18%;
+    --card-foreground: 220 15% 88%;
+    --popover: 220 20% 15%;
+    --popover-foreground: 220 15% 88%;
+    --primary: 180 65% 50%;
+    --primary-foreground: 220 20% 10%;
+    --secondary: 220 15% 30%;
+    --secondary-foreground: 220 15% 88%;
+    --muted: 220 15% 25%;
+    --muted-foreground: 220 10% 60%;
+    --accent: 35 90% 55%;
+    --accent-foreground: 220 20% 10%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 25%;
+    --input: 220 15% 22%;
+    --ring: 180 70% 60%;
+    
+    --chart-1: 180 70% 50%;
+    --chart-2: 210 70% 60%;
+    --chart-3: 35 90% 55%;
+    --chart-4: 300 60% 60%;
+    --chart-5: 120 50% 55%;
 
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 220 20% 15%;
+    --sidebar-foreground: 220 15% 88%;
+    --sidebar-primary: 180 65% 50%;
+    --sidebar-primary-foreground: 220 20% 10%;
+    --sidebar-accent: 35 90% 55%;
+    --sidebar-accent-foreground: 220 20% 10%;
+    --sidebar-border: 220 15% 25%;
+    --sidebar-ring: 180 70% 60%;
   }
 }
 
@@ -94,10 +98,9 @@
   }
   body {
     @apply bg-background text-foreground;
-    /* Ensure fonts are loaded */
     font-feature-settings: "liga" 1, "calt" 1;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-headline;
+    @apply font-headline text-foreground; /* Ensure headlines also use foreground */
   }
 }

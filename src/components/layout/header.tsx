@@ -1,7 +1,8 @@
+
 'use client';
 
 import Link from 'next/link';
-import { FlameKindling, ShoppingCart, UserCircle2, LogIn, LogOut, Settings, LayoutDashboard, StickerIcon, PlusCircle } from 'lucide-react';
+import { ShoppingCart, UserCircle2, LogIn, LogOut, Settings, LayoutDashboard, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,30 +33,37 @@ export default function AppHeader() {
   return (
     <header className="bg-card shadow-md sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        <Link href="/" className="flex items-center gap-2 text-2xl font-headline text-primary hover:opacity-80 transition-opacity">
-          <StickerIcon className="h-8 w-8" />
-          StickerVerse
+        <Link href="/" className="flex items-center gap-1 text-2xl font-headline hover:opacity-80 transition-opacity">
+          <Sparkles className="h-8 w-8 text-primary" />
+          <span className="text-foreground">Think</span>
+          <span className="text-foreground">Stick</span>
+          <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded-md">It</span>
         </Link>
-        <nav className="flex items-center space-x-4 md:space-x-6">
-          <Link href="/" className="text-foreground hover:text-primary transition-colors font-medium">
-            Catalog
-          </Link>
-          <Link href="/custom-sticker" className="text-foreground hover:text-primary transition-colors font-medium">
-            Custom
-          </Link>
-          <Link href="/cart" className="relative text-foreground hover:text-primary transition-colors">
-            <ShoppingCart className="h-6 w-6" />
-            {/* Basic cart count example - replace with actual cart logic */}
-            {/* <span className="absolute -top-2 -right-2 bg-accent text-accent-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">3</span> */}
-          </Link>
+        <nav className="flex items-center space-x-3 md:space-x-4">
+          <Button variant="ghost" asChild className="text-sm text-foreground hover:text-primary">
+            <Link href="/">Home</Link>
+          </Button>
+          <Button variant="ghost" asChild className="text-sm text-foreground hover:text-primary">
+            <Link href="/#catalog">Stickers</Link>
+          </Button>
+          <Button variant="ghost" asChild className="text-sm text-foreground hover:text-primary">
+            <Link href="/custom-sticker">Custom Design</Link>
+          </Button>
+          
+          <Button variant="ghost" size="icon" asChild className="relative text-foreground hover:text-primary transition-colors">
+            <Link href="/cart">
+              <ShoppingCart className="h-5 w-5" />
+              <span className="sr-only">Cart</span>
+            </Link>
+          </Button>
           
           {loading ? (
             <div className="h-8 w-8 bg-muted rounded-full animate-pulse"></div>
           ) : currentUser ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                  <Avatar className="h-9 w-9">
+                <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                  <Avatar className="h-8 w-8">
                     <AvatarImage src={currentUser.photoURL || undefined} alt={currentUser.displayName || 'User'} />
                     <AvatarFallback>{getAvatarFallback(currentUser.displayName, currentUser.email)}</AvatarFallback>
                   </Avatar>
@@ -102,8 +110,8 @@ export default function AppHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button onClick={() => router.push('/login')} variant="ghost">
-              <LogIn className="mr-2 h-5 w-5" /> Login
+            <Button onClick={() => router.push('/login')} variant="outline" size="sm" className="text-sm">
+              <LogIn className="mr-1.5 h-4 w-4" /> Login
             </Button>
           )}
         </nav>

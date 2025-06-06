@@ -1,7 +1,5 @@
-// src/types/index.ts
 
-// Use import type for type-only imports if needed in other files
-// import type { FirebaseUser } from 'firebase/auth'; // Example if you wrap FirebaseUser
+// src/types/index.ts
 
 export interface User {
   uid: string;
@@ -12,7 +10,7 @@ export interface User {
 }
 
 export interface Address {
-  id?: string; // Optional: if stored separately with an ID
+  id?: string; 
   name: string;
   street: string;
   city: string;
@@ -25,12 +23,13 @@ export interface Sticker {
   id: string;
   name: string;
   description: string;
-  imageUrl: string;
+  imageUrls: string[]; // Changed from imageUrl: string
+  videoUrls?: string[]; // New field for videos
   price: number;
   category?: string;
   tags?: string[];
-  availableMaterials: string[]; // e.g., ['vinyl', 'paper-matte']
-  stock?: number; // For inventory
+  availableMaterials: string[]; 
+  stock?: number; 
 }
 
 export interface MaterialOption {
@@ -40,38 +39,41 @@ export interface MaterialOption {
 }
 
 export interface CartItemBase {
-  id: string; // Can be stickerId or a unique ID for custom item
+  id: string; 
   name: string;
   price: number;
   quantity: number;
-  imageUrl?: string;
+  imageUrl?: string; // Primary image for cart display
 }
 export interface CartStickerItem extends CartItemBase {
   type: 'sticker';
   stickerId: string;
-  material?: string; // If pre-designed stickers can have material options
+  material?: string; 
 }
 
 export interface CartCustomItem extends CartItemBase {
   type: 'custom';
-  originalImageUrl: string; // For display or re-order
+  originalImageUrl: string; 
   material: string;
 }
 
 export type CartItem = CartStickerItem | CartCustomItem;
 
 
+export interface OrderItem extends CartItemBase { // Could be more specific if order items differ structurally from cart items
+  // any order-specific item properties
+}
+
 export interface Order {
   id: string;
   userId: string;
-  items: CartItem[];
+  items: OrderItem[]; // Use OrderItem if defined, otherwise CartItem
   totalAmount: number;
   shippingAddress: Address;
-  orderDate: string; // ISO date string
+  orderDate: string; 
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 }
 
-// For AI resolution check
 export interface ImageResolutionResult {
   isResolutionMet: boolean;
   width: number;
