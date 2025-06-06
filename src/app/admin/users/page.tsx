@@ -93,10 +93,10 @@ export default function AdminUsersPage() {
         `This means your Firestore rules are not allowing your account ('${currentUser?.email}') to update other user roles.\n\n` +
         `TROUBLESHOOTING CHECKLIST (for 'match /users/{userId}'):\n` +
         `1. VERIFY YOUR ROLE: Ensure your user document ('users/${currentUser?.uid}') in Firestore has the field 'role' set to the string 'admin'.\n` +
-        `2. FIRESTORE RULE CHECK: The 'allow update' rule should be:\n` +
-        `   'allow update: if request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin" && request.resource.data.keys().hasAny(["role", "lastLogin"]);'\n` +
+        `2. FIRESTORE RULE CHECK: The 'allow update' rule for admins modifying roles should be similar to:\n` +
+        `   'allow update: if ... (request.auth != null && exists(...) && get(...).data.role == "admin" && request.writeFields.hasAny(["role", "lastLogin"]) && request.writeFields.size() <= 2) ... ;'\n` +
         `3. PUBLISH RULES: Changes to Firestore rules must be PUBLISHED.\n` +
-        `4. SIMULATOR: Test an 'update' on 'users/someOtherUserId' by your admin UID. Request data: {'role': 'admin'}.`;
+        `4. SIMULATOR: Test an 'update' on 'users/someOtherUserId' using your admin UID. Request data: {'role': 'admin'}.`;
       }
 
       toast({
