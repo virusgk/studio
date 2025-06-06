@@ -9,11 +9,22 @@ if (typeof window !== 'undefined') {
 
 const serviceAccountString = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON;
 
+// === BEGIN DIAGNOSTIC LOGGING ===
+console.log("FIREBASE_ADMIN_CONFIG_DIAGNOSTIC: Type of FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON:", typeof serviceAccountString);
+if (typeof serviceAccountString === 'string') {
+  console.log("FIREBASE_ADMIN_CONFIG_DIAGNOSTIC: Length of FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON:", serviceAccountString.length);
+  console.log("FIREBASE_ADMIN_CONFIG_DIAGNOSTIC: First 100 chars of FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON:", serviceAccountString.substring(0, 100));
+  console.log("FIREBASE_ADMIN_CONFIG_DIAGNOSTIC: Last 100 chars of FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON:", serviceAccountString.substring(Math.max(0, serviceAccountString.length - 100)));
+} else {
+  console.log("FIREBASE_ADMIN_CONFIG_DIAGNOSTIC: FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON is undefined or not a string.");
+}
+// === END DIAGNOSTIC LOGGING ===
+
 let adminAuthInstance: admin.auth.Auth | null = null;
 let adminDbInstance: admin.firestore.Firestore | null = null;
 let isInitialized = false;
 
-if (!admin.apps.length) {
+if (admin.apps.length === 0) {
   if (!serviceAccountString) {
     console.warn(
       'FIREBASE_ADMIN_INIT_WARN: FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON environment variable is not set. ' +
@@ -25,7 +36,6 @@ if (!admin.apps.length) {
       'Ensure newlines in the private key are properly escaped (e.g., \\n) if the env var is single line. ' +
       'Admin operations WILL FAIL without this.'
     );
-    // Attempt to initialize without explicit credentials (relies on GOOGLE_APPLICATION_CREDENTIALS or ADC in some environments)
     try {
       admin.initializeApp();
       console.log('FIREBASE_ADMIN_INIT: Attempted to initialize with default credentials (e.g., GOOGLE_APPLICATION_CREDENTIALS).');
@@ -38,19 +48,18 @@ if (!admin.apps.length) {
     }
   } else {
     try {
-      const serviceAccount = JSON.parse(serviceAccountString);
+      let serviceAccount = JSON.parse(serviceAccountString);
 
-      // Attempt to normalize newlines in the private_key.
-      // JSON.parse correctly turns "\\n" into "\n".
-      // If the env var had literal "\\\\n", JSON.parse would turn it into "\\n".
-      // This step handles the case where the private_key string, after JSON.parse,
-      // might still contain literal "\\n" instead of actual newlines.
       if (serviceAccount.private_key && typeof serviceAccount.private_key === 'string') {
         const originalPrivateKey = serviceAccount.private_key;
+        // Attempt to normalize newlines in the private_key.
+        // Replace literal '\\n' with actual '\n'.
         serviceAccount.private_key = originalPrivateKey.replace(/\\n/g, '\n');
         if (serviceAccount.private_key !== originalPrivateKey) {
             console.log('FIREBASE_ADMIN_INIT: Normalized newlines in private_key from "\\\\n" to "\\n".');
         }
+      } else {
+        console.warn('FIREBASE_ADMIN_INIT_WARN: private_key field is missing or not a string in the parsed service account JSON.');
       }
 
       admin.initializeApp({
@@ -63,7 +72,6 @@ if (!admin.apps.length) {
         'FIREBASE_ADMIN_INIT_ERROR: Failed to parse FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON or initialize Firebase Admin SDK with it. ' +
         'Ensure the environment variable contains valid JSON and newlines are correctly escaped. Error: ' + e.message
       );
-       // Fallback attempt, though less likely to succeed if specific SA JSON failed.
       try {
         admin.initializeApp();
         console.warn("FIREBASE_ADMIN_INIT_WARN: Initialized Firebase Admin SDK with default credentials as fallback after SA JSON failure.");
@@ -74,7 +82,6 @@ if (!admin.apps.length) {
     }
   }
 } else {
-  // Already initialized
   console.log('Firebase Admin SDK was already initialized.');
   isInitialized = true;
 }
@@ -83,10 +90,10 @@ if (isInitialized && admin.apps.length > 0) {
   try {
     adminAuthInstance = admin.auth();
     adminDbInstance = admin.firestore();
-     console.log('Firebase Admin Auth and Firestore instances obtained successfully.');
+    console.log('Firebase Admin Auth and Firestore instances obtained successfully.');
   } catch (e : any) {
     console.error("FIREBASE_ADMIN_INIT_ERROR: Error obtaining Auth or Firestore instance after initialization: " + e.message);
-    isInitialized = false; // Mark as not truly initialized if instances can't be obtained
+    isInitialized = false;
   }
 }
 
@@ -98,7 +105,6 @@ if(!isInitialized) {
     "Please check server startup logs for specific initialization errors."
   );
 }
-
 
 export function getAdminAuth(): admin.auth.Auth {
   if (!adminAuthInstance) {
@@ -114,5 +120,4 @@ export function getAdminDb(): admin.firestore.Firestore {
   return adminDbInstance;
 }
 
-// Export admin namespace for other potential uses (like admin.firestore.FieldValue)
 export { admin };
