@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -142,9 +141,9 @@ export default function AdminInventoryPage() {
         } else {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to update product. Ensure admin authentication.";
           const detailedDescription = serverErrorMessage.includes("permission-denied")
-            ? `${serverErrorMessage} Please ensure your admin email ('${currentUser?.email}') matches the one in Firestore Security Rules and that the rules allow updates.`
+            ? `${serverErrorMessage} CRITICAL: Ensure your Firestore Security Rules allow updates by admin ('${currentUser?.email}'). The email in the rule must EXACTLY match. For case-insensitivity, use '.lower()' on both sides of the email comparison in your rule (e.g., request.auth.token.email.lower() == 'admin@example.com'.lower()).`
             : serverErrorMessage;
-          toast({ title: "Error Updating Product", description: detailedDescription, variant: "destructive", duration: 9000 });
+          toast({ title: "Error Updating Product", description: detailedDescription, variant: "destructive", duration: 10000 });
           console.error(`CLIENT: Failed to update product ${formData.name}. Server response: ${serverErrorMessage}`);
         }
       } else {
@@ -157,9 +156,9 @@ export default function AdminInventoryPage() {
         } else {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to add product. Ensure admin authentication.";
            const detailedDescription = serverErrorMessage.includes("permission-denied")
-            ? `${serverErrorMessage} Ensure your admin email ('${currentUser?.email}') EXACTLY matches the one in your Firestore Security Rules for write access to the 'stickers' collection. Also verify the rules themselves are correct.`
+            ? `${serverErrorMessage} CRITICAL: Ensure your Firestore Security Rules allow writes by admin ('${currentUser?.email}'). The email in the rule must EXACTLY match. For case-insensitivity, use '.lower()' on both sides of the email comparison in your rule (e.g., request.auth.token.email.lower() == 'admin@example.com'.lower()).`
             : serverErrorMessage;
-          toast({ title: "Error Adding Product", description: detailedDescription, variant: "destructive", duration: 9000 });
+          toast({ title: "Error Adding Product", description: detailedDescription, variant: "destructive", duration: 10000 });
           console.error(`CLIENT: Failed to add product ${formData.name}. Server response: ${serverErrorMessage}`);
         }
       }
@@ -209,9 +208,9 @@ export default function AdminInventoryPage() {
     } else {
       let serverErrorMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}. Ensure admin authentication.`;
       const detailedDescription = serverErrorMessage.includes("permission-denied")
-        ? `${serverErrorMessage} Ensure your Firestore Security Rules allow admins ('${currentUser?.email}') to delete from the 'stickers' collection.`
+        ? `${serverErrorMessage} CRITICAL: Ensure your Firestore Security Rules allow admins ('${currentUser?.email}') to delete. The email in the rule must EXACTLY match. For case-insensitivity, use '.lower()' on both sides of the email comparison in your rule.`
         : serverErrorMessage;
-      toast({ title: "Error Deleting Product", description: detailedDescription, variant: "destructive", duration: 9000 });
+      toast({ title: "Error Deleting Product", description: detailedDescription, variant: "destructive", duration: 10000 });
       console.error(`CLIENT: Failed to delete product ${stickerName}. Server response: ${serverErrorMessage}`);
     }
     setIsSubmitting(false);
