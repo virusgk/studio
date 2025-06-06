@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -141,7 +142,10 @@ export default function AdminInventoryPage() {
         } else {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to update product. Ensure admin authentication.";
           const detailedDescription = serverErrorMessage.includes("permission-denied")
-            ? `${serverErrorMessage} CRITICAL: Ensure your Firestore Security Rules allow updates by admin ('${currentUser?.email}'). The email in the rule must EXACTLY match. For case-insensitivity, use '.lower()' on both sides of the email comparison in your rule (e.g., request.auth.token.email.lower() == 'admin@example.com'.lower()).`
+            ? `${serverErrorMessage} CRITICAL: Firestore permission denied. 
+              1. Verify you are logged in with the correct admin Google account ('${currentUser?.email}').
+              2. In Firebase Console > Firestore > Rules, ensure the 'stickers' collection allows writes for your admin email. The rule should look like: 'allow write: if request.auth != null && request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'. Pay close attention to exact email match and using '.lower()'.
+              3. Ensure your NEXT_PUBLIC_ADMIN_EMAIL environment variable is correctly set to '${currentUser?.email?.toLowerCase()}' and your server is restarted if changed.`
             : serverErrorMessage;
           toast({ title: "Error Updating Product", description: detailedDescription, variant: "destructive", duration: 10000 });
           console.error(`CLIENT: Failed to update product ${formData.name}. Server response: ${serverErrorMessage}`);
@@ -156,7 +160,10 @@ export default function AdminInventoryPage() {
         } else {
           serverErrorMessage = typeof result === 'string' ? result : "Failed to add product. Ensure admin authentication.";
            const detailedDescription = serverErrorMessage.includes("permission-denied")
-            ? `${serverErrorMessage} CRITICAL: Ensure your Firestore Security Rules allow writes by admin ('${currentUser?.email}'). The email in the rule must EXACTLY match. For case-insensitivity, use '.lower()' on both sides of the email comparison in your rule (e.g., request.auth.token.email.lower() == 'admin@example.com'.lower()).`
+            ? `${serverErrorMessage} CRITICAL: Firestore permission denied. 
+              1. Verify you are logged in with the correct admin Google account ('${currentUser?.email}').
+              2. In Firebase Console > Firestore > Rules, ensure the 'stickers' collection allows writes for your admin email. The rule should look like: 'allow write: if request.auth != null && request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'. Pay close attention to exact email match and using '.lower()'.
+              3. Ensure your NEXT_PUBLIC_ADMIN_EMAIL environment variable is correctly set to '${currentUser?.email?.toLowerCase()}' and your server is restarted if changed.`
             : serverErrorMessage;
           toast({ title: "Error Adding Product", description: detailedDescription, variant: "destructive", duration: 10000 });
           console.error(`CLIENT: Failed to add product ${formData.name}. Server response: ${serverErrorMessage}`);
@@ -208,7 +215,7 @@ export default function AdminInventoryPage() {
     } else {
       let serverErrorMessage = typeof result === 'string' ? result : `Could not remove ${stickerName}. Ensure admin authentication.`;
       const detailedDescription = serverErrorMessage.includes("permission-denied")
-        ? `${serverErrorMessage} CRITICAL: Ensure your Firestore Security Rules allow admins ('${currentUser?.email}') to delete. The email in the rule must EXACTLY match. For case-insensitivity, use '.lower()' on both sides of the email comparison in your rule.`
+        ? `${serverErrorMessage} CRITICAL: Firestore permission denied for delete. Ensure your Firestore Security Rules allow admin ('${currentUser?.email}') to delete. The rule should use '.lower()' for case-insensitive email comparison, e.g., 'request.auth.token.email.lower() == "${currentUser?.email?.toLowerCase()}".lower();'.`
         : serverErrorMessage;
       toast({ title: "Error Deleting Product", description: detailedDescription, variant: "destructive", duration: 10000 });
       console.error(`CLIENT: Failed to delete product ${stickerName}. Server response: ${serverErrorMessage}`);
@@ -372,4 +379,5 @@ export default function AdminInventoryPage() {
     </AdminLayout>
   );
 }
+
 
