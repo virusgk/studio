@@ -5,11 +5,12 @@ import type { UserDocument } from '@/types';
 
 // This function is now THE gatekeeper for admin operations.
 // It uses the Firebase Admin SDK.
-async function verifyAdmin(idToken: string, serviceName: string = 'USER_SERVICE'): Promise<string | null> {
+async function verifyAdmin(idToken: string, serviceName: string = 'USER_SERVICE'): Promise<{ uid: string } | { error: string; isInitializationError?: boolean }> {
   const logPrefix = `VERIFY_ADMIN (${serviceName})`;
   if (!idToken) {
-    console.error(`${logPrefix}: ID token is missing or empty.`);
-    return null;
+    const errorMsg = `${logPrefix}: ID token is missing or empty.`;
+    console.error(errorMsg);
+    return { error: "ID token is missing or empty." };
   }
   console.log(`${logPrefix}: Received ID token (first 10 chars): ${idToken.substring(0, 10)}...`);
 
@@ -18,8 +19,10 @@ async function verifyAdmin(idToken: string, serviceName: string = 'USER_SERVICE'
     const adminDb = getAdminDb();   
     
     if (!adminAuth || !adminDb) {
-      console.error(`${logPrefix}: Firebase Admin Auth or DB SDK is not initialized. Check server startup logs.`);
-      return null;
+      const errorMsg = `${logPrefix}: Firebase Admin Auth or DB SDK is not initialized. Check server startup logs. This usually means the FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON environment variable is missing or invalid.`;
+      console.error(errorMsg);
+      // This case should ideally be caught by getAdminAuth/getAdminDb throwing, but as a fallback:
+      return { error: "Firebase Admin Auth or DB SDK is not initialized. Check server startup logs.", isInitializationError: true };
     }
     console.log(`${logPrefix}: Firebase Admin Auth and DB SDKs obtained.`);
     
@@ -28,8 +31,9 @@ async function verifyAdmin(idToken: string, serviceName: string = 'USER_SERVICE'
       decodedToken = await adminAuth.verifyIdToken(idToken);
       console.log(`${logPrefix}: ID token successfully verified. UID: ${decodedToken.uid}, Email: ${decodedToken.email}`);
     } catch (tokenError: any) {
-      console.error(`${logPrefix}: ID token verification FAILED. Error code: ${tokenError.code}, Message: ${tokenError.message}`, tokenError);
-      return null; 
+      const errorMsg = `${logPrefix}: ID token verification FAILED. Error code: ${tokenError.code}, Message: ${tokenError.message}`;
+      console.error(errorMsg, tokenError);
+      return { error: `ID token verification FAILED. ${tokenError.message}` }; 
     }
 
     const uid = decodedToken.uid;
@@ -39,8 +43,9 @@ async function verifyAdmin(idToken: string, serviceName: string = 'USER_SERVICE'
     const userDocSnap = await userDocRef.get();
 
     if (!userDocSnap.exists) {
-      console.error(`${logPrefix}: User document for UID ${uid} does NOT exist in Firestore.`);
-      return null; 
+      const errorMsg = `${logPrefix}: User document for UID ${uid} does NOT exist in Firestore. Cannot verify admin status.`;
+      console.error(errorMsg);
+      return { error: `User document for UID ${uid} not found. Cannot verify admin status.` }; 
     }
     
     const userData = userDocSnap.data();
@@ -48,44 +53,30 @@ async function verifyAdmin(idToken: string, serviceName: string = 'USER_SERVICE'
     console.log(`${logPrefix}: User document for UID ${uid} exists. Role found: '${userRole}'`);
 
     if (userRole !== 'admin') {
-      console.error(`${logPrefix}: User ${uid} is NOT an admin. Role is '${userRole}'. Access denied.`);
-      return null; 
+      const errorMsg = `${logPrefix}: User ${uid} is NOT an admin. Role is '${userRole}'. Access denied.`;
+      console.error(errorMsg);
+      return { error: `User ${uid} (Email: ${decodedToken.email}) is not authorized (role: ${userRole}). Access denied.` }; 
     }
 
-    console.log(`${logPrefix}: User ${uid} successfully verified as admin. Role: '${userRole}'.`);
-    return uid; 
+    console.log(`${logPrefix}: User ${uid} (Email: ${decodedToken.email}) successfully verified as admin. Role: '${userRole}'.`);
+    return { uid }; 
   } catch (error: any) {
-    console.error(`${logPrefix}: An unexpected error occurred during admin verification. Message: ${error.message}`, error);
-    return null;
+    // This catch block will now primarily catch errors from getAdminAuth() or getAdminDb() if they throw.
+    const isInitializationError = error.message.includes("Firebase Admin Auth is not initialized") || 
+                                  error.message.includes("Firebase Admin Firestore is not initialized");
+    const specificMessage = `${logPrefix}: Admin verification failed. Error: ${error.message}`;
+    console.error(specificMessage, error);
+    return { error: error.message, isInitializationError };
   }
 }
 
 export async function getAllUsers(): Promise<UserDocument[]> {
-  // This function is typically called by an admin, so it might also need verifyAdmin
-  // However, if it's just reading data that Firestore rules allow admins to read,
-  // it might be okay with client SDK if the client is an admin.
-  // For consistency and security, making it admin-only via verifyAdmin is safer if called from client.
-  // For now, assuming it's called in a context where client SDK's auth is sufficient or rules allow.
-  // If this needs to be callable from a generic client that isn't necessarily admin, rules must permit.
-  // Sticking with existing client SDK for this read, as it doesn't modify data.
-  // Firestore rules would control if a non-admin client can call this.
-  // If this should *only* be callable by an admin *client*, then the client page needs to handle this.
-  // Or, if it's a server action used by an admin page, it should also use verifyAdmin.
-  // Let's assume for now this is a read operation that the client page (AdminUsersPage) ensures only an admin can trigger.
-  
-  // To be truly secure if called from a client as a server action, it *should* use verifyAdmin.
-  // However, just to get the `updateUserRole` working, I'll leave this for now.
-  // The `getAllUsers` function in AdminUsersPage already uses client-side `db`.
-
-  // Client-side function to get users (does not require admin auth for the action itself, rules handle access)
-  // This one can continue to use the client 'db' if appropriate.
-  // Firestore rules need to allow an admin client to read all user docs.
-  // The existing AdminUsersPage fetches users directly with client SDK for now.
-  // So, this server action `getAllUsers` might be redundant or needs to be admin-protected if exposed.
-  // For simplicity, I am commenting out the previous implementation that used client 'db'
-  // as AdminUsersPage fetches its own data. If this was meant to be an admin-only secure fetch, it would use verifyAdmin.
+  // This server action is not currently used by the client, 
+  // as AdminUsersPage fetches its own data using the client SDK.
+  // If it were to be used as a secure admin-only endpoint, it would need an idToken and verifyAdmin.
+  // For now, returning empty as per previous state.
   console.warn("SERVER (userService.getAllUsers): This function is currently not designed to be securely called as a server action by non-admins. AdminUsersPage fetches users client-side. If this is intended as a secure server action, it needs an idToken and verifyAdmin().");
-  return []; // Return empty, as AdminUsersPage handles its own data fetching.
+  return []; 
 }
 
 
@@ -93,20 +84,28 @@ export async function updateUserRole(idToken: string, userId: string, newRole: '
   const serviceName = 'updateUserRole';
   console.log(`SERVER (${serviceName}): Invoked for userId: ${userId}, newRole: ${newRole}`);
   
-  const adminUid = await verifyAdmin(idToken, serviceName);
-  if (!adminUid) {
-    console.error(`SERVER (${serviceName}): Admin verification failed for updating role of user ${userId}.`);
-    return "Server Action Error: User is not authorized to perform this admin operation or token is invalid.";
+  const verificationResult = await verifyAdmin(idToken, serviceName);
+  if ('error' in verificationResult) {
+    let errorMessage = verificationResult.error;
+    if (verificationResult.isInitializationError) {
+      errorMessage = `Critical Firebase Admin SDK issue: ${verificationResult.error}`;
+    } else {
+      errorMessage = `Authorization failed: ${verificationResult.error}`;
+    }
+    console.error(`SERVER (${serviceName}): Admin verification failed for updating role of user ${userId}. Error: ${errorMessage}`);
+    return `Server Action Error: ${errorMessage}`;
   }
+  const adminUid = verificationResult.uid;
   
   if (adminUid === userId && newRole === 'user') {
-     console.warn(`SERVER (${serviceName}): Admin ${adminUid} attempting to revoke their own admin status. Denied by service.`);
-     return "Server Action Error: Admins cannot revoke their own admin status through this service.";
+     const selfRevokeError = `Server Action Error: Admins (UID: ${adminUid}) cannot revoke their own admin status through this service.`;
+     console.warn(`SERVER (${serviceName}): ${selfRevokeError}`);
+     return selfRevokeError;
   }
 
   console.log(`SERVER (${serviceName}): Admin UID ${adminUid} verified. Proceeding to update role for ${userId}.`);
   try {
-    const adminDb = getAdminDb(); // Use Admin SDK's Firestore instance
+    const adminDb = getAdminDb(); 
     const userDocRef = adminDb.collection('users').doc(userId);
     const updatePayload = { 
       role: newRole,
