@@ -44,7 +44,6 @@ export async function updateUserRole(userId: string, newRole: 'admin' | 'user'):
     console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: Payload for updateDoc: ${JSON.stringify(updatePayload)}`);
     
     // Firestore security rules MUST allow the calling admin to update the 'role' field.
-    // If called by static admin via a server action, Firestore might see request.auth as null.
     await updateDoc(userDocRef, updatePayload);
     
     console.log(`SERVER: UPDATE_USER_ROLE_SERVICE: User role updated successfully in Firestore for userId: ${userId} to ${newRole}`);
@@ -60,11 +59,14 @@ export async function updateUserRole(userId: string, newRole: 'admin' | 'user'):
     console.error("SERVER: UPDATE_USER_ROLE_SERVICE: Error Object:", error);
     console.error("SERVER: UPDATE_USER_ROLE_SERVICE: Firebase Error Code:", errorCode);
     console.error("SERVER: UPDATE_USER_ROLE_SERVICE: Firebase Error Message:", errorMessage);
+    if (errorCode === 'permission-denied') {
+        console.error("SERVER: UPDATE_USER_ROLE_SERVICE: SPECIFIC_ADVICE_FOR_PERMISSION_DENIED: This typically means the server action's call to Firestore was not authenticated as a user with the required role ('admin') according to Firestore Security Rules. Check that the rules are published correctly and that the user making the client-side request has 'role: \"admin\"' in their Firestore 'users' document. For server actions, the client's auth state must be correctly propagated to the server execution context for the Firebase Client SDK to use.");
+    }
     if (error.stack) {
         console.error("SERVER: UPDATE_USER_ROLE_SERVICE: Error Stack Trace:", error.stack);
     }
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    console.error("SERVER: UPDATE_USER_ROLE_SERVICE: Please check Firestore rules. If the static admin is making this call, Firestore rules might see the request as unauthenticated or without the expected 'admin-static-id' in 'request.auth.uid' when the server action executes.");
+    console.error("SERVER: UPDATE_USER_ROLE_SERVICE: Please check Firestore rules. The client's Firebase Authentication context must be correctly propagated to the server action's execution environment for Firestore rules to validate the user's admin role.");
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     
     return `Server Error: ${fullError}`;

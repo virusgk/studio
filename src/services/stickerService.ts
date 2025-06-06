@@ -50,6 +50,9 @@ export async function addStickerToDB(stickerData: Omit<Sticker, 'id'>): Promise<
     console.error("SERVER: ADD_STICKER_TO_DB: Error Object:", error);
     console.error("SERVER: ADD_STICKER_TO_DB: Firebase Error Code:", errorCode);
     console.error("SERVER: ADD_STICKER_TO_DB: Firebase Error Message:", errorMessage);
+    if (errorCode === 'permission-denied') {
+        console.error("SERVER: ADD_STICKER_TO_DB: SPECIFIC_ADVICE_FOR_PERMISSION_DENIED: This typically means the server action's call to Firestore was not authenticated as a user with the required role ('admin') according to Firestore Security Rules. Check that the rules are published correctly and that the user making the client-side request has 'role: \"admin\"' in their Firestore 'users' document. The server action's Firebase Authentication context (derived from the client's context) must allow this operation according to your Firestore rules.");
+    }
     if (error.stack) {
         console.error("SERVER: ADD_STICKER_TO_DB: Error Stack Trace:", error.stack);
     }
@@ -84,6 +87,9 @@ export async function updateStickerInDB(stickerId: string, stickerData: Partial<
     console.error("SERVER: UPDATE_STICKER_IN_DB: Error Object:", error);
     console.error("SERVER: UPDATE_STICKER_IN_DB: Firebase Error Code:", errorCode);
     console.error("SERVER: UPDATE_STICKER_IN_DB: Firebase Error Message:", errorMessage);
+     if (errorCode === 'permission-denied') {
+        console.error("SERVER: UPDATE_STICKER_IN_DB: SPECIFIC_ADVICE_FOR_PERMISSION_DENIED: This typically means the server action's call to Firestore was not authenticated as a user with the required role ('admin') according to Firestore Security Rules. Check that the rules are published correctly and that the user making the client-side request has 'role: \"admin\"' in their Firestore 'users' document. The server action's Firebase Authentication context (derived from the client's context) must allow this operation according to your Firestore rules.");
+    }
     if (error.stack) {
         console.error("SERVER: UPDATE_STICKER_IN_DB: Error Stack Trace:", error.stack);
     }
@@ -111,6 +117,9 @@ export async function deleteStickerFromDB(stickerId: string): Promise<boolean | 
     console.error("SERVER: DELETE_STICKER_FROM_DB: Error Object:", error);
     console.error("SERVER: DELETE_STICKER_FROM_DB: Firebase Error Code:", errorCode);
     console.error("SERVER: DELETE_STICKER_FROM_DB: Firebase Error Message:", errorMessage);
+    if (errorCode === 'permission-denied') {
+        console.error("SERVER: DELETE_STICKER_FROM_DB: SPECIFIC_ADVICE_FOR_PERMISSION_DENIED: This typically means the server action's call to Firestore was not authenticated as a user with the required role ('admin') according to Firestore Security Rules. Check that the rules are published correctly and that the user making the client-side request has 'role: \"admin\"' in their Firestore 'users' document. The server action's Firebase Authentication context (derived from the client's context) must allow this operation according to your Firestore rules.");
+    }
      if (error.stack) {
         console.error("SERVER: DELETE_STICKER_FROM_DB: Error Stack Trace:", error.stack);
     }
@@ -118,3 +127,4 @@ export async function deleteStickerFromDB(stickerId: string): Promise<boolean | 
     return `Server Error: ${fullError}`; // Return detailed error message
   }
 }
+
